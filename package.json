@@ -1,0 +1,46 @@
+{
+  "name": "survey-lokasi-omi",
+  "version": "1.0.0",
+  "description": "API for OMI Survey",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "babel-node src/main.js",
+    "dev": "nodemon --exec babel-node src/main.js",
+    "test": "jest --transform '^.+\\.[t|j]sx?$' babel-jest"
+  },
+  "author": "TImothy Wijaya",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.1",
+    "hashids": "^2.3.0",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
+    "morgan": "^1.10.0",
+    "mysql2": "^3.11.3",
+    "oracledb": "^6.6.0",
+    "uuid": "^10.0.0",
+    "winston": "^3.15.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@babel/node": "^7.25.7",
+    "@babel/preset-env": "^7.25.8",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.13",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.0.0"
+  }
+}
