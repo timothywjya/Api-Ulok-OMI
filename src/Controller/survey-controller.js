@@ -8,8 +8,8 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 
 export class SurveyController {
     static async getDataSurveyLocation(req, res, next) {
-        const encryptedImplementedById = req.query.implementedById;
-        const encryptedSurveyTypeId = req.query.surveyTypeId;
+        const encryptedImplementedById = req.query.implementedBy;
+        const encryptedSurveyTypeId = req.query.surveyType;
         const branchCode = req.query.branchCode;
 
         const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
@@ -17,10 +17,10 @@ export class SurveyController {
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
-            const decryptedImplementedById = decryptId(encryptedImplementedById, USER_SECRET_KEY);
+            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
             let implementedById = parseInt(decryptedImplementedById);
 
-            const decryptedSurveyTypeId = decryptId(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
+            const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
             let surveyTypeId = parseInt(decryptedSurveyTypeId);
 
             const rawData = await db('survey_headers')
@@ -75,9 +75,9 @@ export class SurveyController {
         }
     }
 
-    static async getDataSurveyLocation(req, res, next) {
-        const encryptedImplementedById = req.query.implementedById;
-        const encryptedSurveyTypeId = req.query.surveyTypeId;
+    static async getDataDetailSurveyLocation(req, res, next) {
+        const surveyIds = req.query.survey_ids;
+        const encryptedImplementedById = req.query.implementedBy;
         const branchCode = req.query.branchCode;
 
         const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
@@ -85,11 +85,11 @@ export class SurveyController {
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
-            const decryptedImplementedById = decryptId(encryptedImplementedById, USER_SECRET_KEY);
-            let implementedById = parseInt(decryptedImplementedById);
+            const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
+            let IdSurvey = parseInt(surveyId);
 
-            const decryptedSurveyTypeId = decryptId(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
-            let surveyTypeId = parseInt(decryptedSurveyTypeId);
+            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
+            let implementedById = parseInt(decryptedImplementedById);
 
             const rawData = await db('survey_headers')
                 .select(
