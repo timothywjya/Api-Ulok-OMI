@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { PublicSurveyController } from '../Controller/survey-controller.js';
+import { UserPublicController } from '../Controller/user-controller.js';
 
 const router = Router();
 
@@ -14,5 +16,8 @@ router.get('/', (req, res) => {
         status_code: 200,
     });
 });
+
+router.get('/get-data-public-survey-lokasi', PublicSurveyController.getPublicDataSurveyLocation);
+router.get('/get-data-public-user', UserPublicController.getPublicDataUser);
 
 export default router;
