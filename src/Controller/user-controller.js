@@ -1,8 +1,8 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { CustomError } from '../Error/error-handling.js';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
+import { CustomError } from '../Error/error-handling.js';
 import NodeHashIds from '../Utils/Hashids.js';
 
 const db = knex(knexConfig[process.env.NODE_ENV || 'development']);
@@ -15,8 +15,8 @@ const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 export class UserController {
     static async getLoggedInUser(req, res, next) {
         const logger = req.logger;
-        const bearerToken = req.bearerToken;
-        // const bearerToken = process.env.OMIHO_PROXY_BEARER_TOKEN;
+        // const bearerToken = req.bearerToken;
+        const bearerToken = process.env.OMIHO_PROXY_BEARER_TOKEN;
 
         try {
             let omihoResponse;
@@ -42,6 +42,31 @@ export class UserController {
                     'Error',
                     'User Data is not Found.'
                 ));
+            }
+
+            const existingUser = await db('users')
+                .where('sso_id', userInfo.id)
+                .andWhere('employee_identification_number', userInfo.nik)
+                .andWhere('email', userInfo.email)
+                .andWhere('branch_code', userInfo.branch_code,)
+                .andWhere('role_id', userInfo.role_id)
+                .first();
+
+            const userDataToSave = {
+                sso_id: userInfo.id,
+                name: userInfo.name,
+                email: userInfo.email,
+                employee_identification_number: userInfo.nik,
+                branch_code: userInfo.branch_code,
+                role_id: userInfo.role_id,
+                updated_at: new Date()
+            };
+
+            if (!existingUser) {
+                await db('users').insert({
+                    ...userDataToSave,
+                    created_at: new Date()
+                });
             }
 
             res.status(200).json({
