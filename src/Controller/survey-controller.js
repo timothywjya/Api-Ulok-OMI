@@ -9,19 +9,19 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 export class SurveyController {
     static async getDataSurveyLocation(req, res, next) {
         const encryptedImplementedById = req.query.implementedBy;
-        const encryptedSurveyTypeId = req.query.surveyType;
+        // const encryptedSurveyTypeId = req.query.surveyType;
         const branchCode = req.query.branchCode;
 
         const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
-        const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
+        // const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
             const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
             let implementedById = parseInt(decryptedImplementedById);
 
-            const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
-            let surveyTypeId = parseInt(decryptedSurveyTypeId);
+            // const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
+            // let surveyTypeId = parseInt(decryptedSurveyTypeId);
 
             const rawData = await db('survey_headers')
                 .select(
@@ -41,7 +41,7 @@ export class SurveyController {
                 .where('survey_headers.implemented_by', implementedById)
                 .whereNull('survey_headers.check_in')
                 .whereNull('survey_headers.check_out')
-                .andWhere('master_survey_types.id', surveyTypeId)
+                .andWhere('master_survey_types.id', 1)
                 .andWhere('survey_headers.branch_code', branchCode)
                 .andWhereRaw('survey_headers.implementation_date >= NOW()')
                 .andWhere('survey_headers.is_visited', 0);
@@ -61,7 +61,7 @@ export class SurveyController {
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Survey Sucessfully',
+                message: 'Get Data Survey Location Sucessfully',
                 data: data
             });
 
@@ -77,51 +77,60 @@ export class SurveyController {
 
     static async getDataDetailSurveyLocation(req, res, next) {
         const surveyIds = req.query.survey_ids;
-        const encryptedImplementedById = req.query.implementedBy;
-        const branchCode = req.query.branchCode;
 
-        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
-        const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
+        const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
+        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEYii;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
             const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
             let IdSurvey = parseInt(surveyId);
 
-            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
-            let implementedById = parseInt(decryptedImplementedById);
-
-            const rawData = await db('survey_headers')
+            const rawQuestion = await db('survey_details')
                 .select(
-                    'survey_headers.id as header_id',
-                    db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    db.raw("DATE_FORMAT(survey_headers.check_in, '%d-%m-%Y %H:%i') AS check_in"),
-                    db.raw("DATE_FORMAT(survey_headers.check_out, '%d-%m-%Y %H:%i') AS check_out"),
-                    'users.name',
-                    'users.employee_identification_number as nik',
-                    'users.branch_code',
-                    db.raw("DATE_FORMAT(survey_headers.implementation_date, '%e %M %Y') AS survey_date"),
-                    db.raw("CASE WHEN survey_headers.is_visited = 1 THEN 'SUDAH DIKUNJUNGI' ELSE 'BELUM DIKUNJUNGI' END AS visit_status"),
-                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN 'BERPOTENSI' ELSE 'KURANG BERPOTENSI' END AS prospect_status")
+                    'question_id',
+                    'question_text as question',
+                    'answer_input_type',
+                    'master_survey_types.survey_type'
                 )
-                .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
-                .join('users', 'users.id', '=', 'survey_headers.implemented_by')
-                .where('survey_headers.implemented_by', implementedById)
-                .whereNull('survey_headers.check_in')
-                .whereNull('survey_headers.check_out')
-                .andWhere('master_survey_types.id', surveyTypeId)
-                .andWhere('survey_headers.branch_code', branchCode)
-                .andWhereRaw('survey_headers.implementation_date >= NOW()')
-                .andWhere('survey_headers.is_visited', 0);
+                .join("master_questions", "master_questions.id", '=', "question_id")
+                .join("master_survey_types", "master_survey_types.id", "=", "survey_details.question_type")
+                .where("survey_header_id", IdSurvey);
 
-            const data = rawData.map(item => {
+            const questionIds = rawQuestion.map(q => q.question_id);
+
+            const rawOption = await db('master_options')
+                .select(
+                    'id',
+                    'question_id',
+                    'option_group',
+                    'option_code',
+                    'option_label'
+                )
+                .whereIn("question_id", questionIds);
+
+            const dataQuestion = rawQuestion.map(item => {
                 const {
-                    header_id,
+                    question_id,
                     ...rest
                 } = item;
 
                 return {
-                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
+                    question_ids: NodeHashIds.encode(question_id, QUESTION_SECRET_KEY),
+                    ...rest
+                };
+            });
+
+            const dataOption = rawOption.map(item => {
+                const {
+                    id,
+                    question_id,
+                    ...rest
+                } = item;
+
+                return {
+                    option_ids: NodeHashIds.encode(id, OPTION_SECRET_KEY),
+                    question_ids: NodeHashIds.encode(question_id, QUESTION_SECRET_KEY),
                     ...rest
                 };
             });
@@ -129,8 +138,8 @@ export class SurveyController {
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Survey Sucessfully',
-                data: data
+                message: 'Get Data Question and Options Survey Location Sucessfully',
+                data: [dataQuestion, dataOption]
             });
 
         } catch (error) {
@@ -280,22 +289,24 @@ export class SurveyController {
     }
 
     static async getDataSurveyMonitoring(req, res, next) {
+        const encryptedImplementedById = req.query.implementedBy;
+        // const encryptedSurveyTypeId = req.query.surveyType;
+        const branchCode = req.query.branchCode;
+
+        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+        // const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
+        const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
+
         try {
-            const implementedById = parseInt(req.query.implementedById);
-            const surveyTypeId = parseInt(req.query.surveyTypeId);
+            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
+            let implementedById = parseInt(decryptedImplementedById);
 
-            const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
-
-            if (isNaN(implementedById) || isNaN(surveyTypeId)) {
-                throw new CustomError('Parameter query (implementedById, surveyTypeId) tidak lengkap atau tidak valid.', 400);
-            }
-            if (!LOCATION_SECRET_KEY) {
-                throw new CustomError('Kunci enkripsi (SURVEY_LOCATION_SECRET_KEY) belum diatur di environment.', 500);
-            }
+            // const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
+            // let surveyTypeId = parseInt(decryptedSurveyTypeId);
 
             const rawData = await db('survey_headers')
                 .select(
-                    'survey_headers.id',
+                    'survey_headers.id as header_id',
                     db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
                     db.raw("DATE_FORMAT(survey_headers.check_in, '%d-%m-%Y %H:%i') AS check_in"),
                     db.raw("DATE_FORMAT(survey_headers.check_out, '%d-%m-%Y %H:%i') AS check_out"),
@@ -309,30 +320,35 @@ export class SurveyController {
                 .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
                 .join('users', 'users.id', '=', 'survey_headers.implemented_by')
                 .where('survey_headers.implemented_by', implementedById)
-                .andWhere('master_survey_types.id', surveyTypeId)
-                .andWhere('survey_headers.is_visited', 1)
-                .andWhereNotNull('survey_headers.check_in')
-                .andWhereNotNull('survey_headers.check_out');
+                .whereNull('survey_headers.check_in')
+                .whereNull('survey_headers.check_out')
+                .andWhere('master_survey_types.id', 2)
+                .andWhere('survey_headers.branch_code', branchCode)
+                .andWhereRaw('survey_headers.implementation_date >= NOW()')
+                .andWhere('survey_headers.is_visited', 0);
 
             const data = rawData.map(item => {
-                const { id, ...rest } = item;
+                const {
+                    header_id,
+                    ...rest
+                } = item;
 
                 return {
-                    ids: encryptId(id, LOCATION_SECRET_KEY),
-                    ...rest,
+                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
+                    ...rest
                 };
             });
 
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Survey Sucessfully',
+                message: 'Get Data Survey Location Sucessfully',
                 data: data
             });
 
         } catch (error) {
             next(new CustomError(
-                'Terjadi kesalahan saat mengambil data survey monitoring',
+                'Failed to Get Data Survey Location',
                 error.statusCode || 500,
                 'Error',
                 error.message
@@ -341,59 +357,75 @@ export class SurveyController {
     }
 
     static async getDataDetailSurveyMonitoring(req, res, next) {
+        const surveyIds = req.query.survey_ids;
+
+        const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
+        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEYii;
+        const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
+
         try {
-            const implementedById = parseInt(req.query.implementedById);
-            const surveyTypeId = parseInt(req.query.surveyTypeId);
+            const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
+            let IdSurvey = parseInt(surveyId);
 
-            const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
-
-            if (isNaN(implementedById) || isNaN(surveyTypeId)) {
-                throw new CustomError('Parameter query (implementedById, surveyTypeId) tidak lengkap atau tidak valid.', 400);
-            }
-            if (!LOCATION_SECRET_KEY) {
-                throw new CustomError('Kunci enkripsi (SURVEY_LOCATION_SECRET_KEY) belum diatur di environment.', 500);
-            }
-
-            const rawData = await db('survey_headers')
+            const rawQuestion = await db('survey_details')
                 .select(
-                    'survey_headers.id',
-                    db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    db.raw("DATE_FORMAT(survey_headers.check_in, '%d-%m-%Y %H:%i') AS check_in"),
-                    db.raw("DATE_FORMAT(survey_headers.check_out, '%d-%m-%Y %H:%i') AS check_out"),
-                    'users.name',
-                    'users.employee_identification_number as nik',
-                    'users.branch_code',
-                    db.raw("DATE_FORMAT(survey_headers.implementation_date, '%e %M %Y') AS survey_date"),
-                    db.raw("CASE WHEN survey_headers.is_visited = 1 THEN 'SUDAH DIKUNJUNGI' ELSE 'BELUM DIKUNJUNGI' END AS visit_status"),
-                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN 'BERPOTENSI' ELSE 'KURANG BERPOTENSI' END AS prospect_status")
+                    'question_id',
+                    'question_text as question',
+                    'answer_input_type',
+                    'master_survey_types.survey_type'
                 )
-                .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
-                .join('users', 'users.id', '=', 'survey_headers.implemented_by')
-                .where('survey_headers.implemented_by', implementedById)
-                .andWhere('master_survey_types.id', surveyTypeId)
-                .andWhere('survey_headers.is_visited', 1)
-                .andWhereNotNull('survey_headers.check_in')
-                .andWhereNotNull('survey_headers.check_out');
+                .join("master_questions", "master_questions.id", '=', "question_id")
+                .join("master_survey_types", "master_survey_types.id", "=", "survey_details.question_type")
+                .where("survey_header_id", IdSurvey);
 
-            const data = rawData.map(item => {
-                const { id, ...rest } = item;
+            const questionIds = rawQuestion.map(q => q.question_id);
+
+            const rawOption = await db('master_options')
+                .select(
+                    'id',
+                    'question_id',
+                    'option_group',
+                    'option_code',
+                    'option_label'
+                )
+                .whereIn("question_id", questionIds);
+
+            const dataQuestion = rawQuestion.map(item => {
+                const {
+                    question_id,
+                    ...rest
+                } = item;
 
                 return {
-                    ids: encryptId(id, LOCATION_SECRET_KEY),
-                    ...rest,
+                    question_ids: NodeHashIds.encode(question_id, QUESTION_SECRET_KEY),
+                    ...rest
+                };
+            });
+
+            const dataOption = rawOption.map(item => {
+                const {
+                    id,
+                    question_id,
+                    ...rest
+                } = item;
+
+                return {
+                    option_ids: NodeHashIds.encode(id, OPTION_SECRET_KEY),
+                    question_ids: NodeHashIds.encode(question_id, QUESTION_SECRET_KEY),
+                    ...rest
                 };
             });
 
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Survey Sucessfully',
-                data: data
+                message: 'Get Data Question and Options Survey Location Sucessfully',
+                data: [dataQuestion, dataOption]
             });
 
         } catch (error) {
             next(new CustomError(
-                'Terjadi kesalahan saat mengambil data survey monitoring',
+                'Failed to Get Data Survey Location',
                 error.statusCode || 500,
                 'Error',
                 error.message
@@ -564,7 +596,6 @@ export class PublicSurveyController {
                 .join('users', 'users.id', '=', 'survey_headers.implemented_by')
                 .whereNull('survey_headers.check_in')
                 .whereNull('survey_headers.check_out')
-                .andWhereRaw('survey_headers.implementation_date >= NOW()')
                 .andWhere('survey_headers.is_visited', 0);
 
             const data = rawData.map(item => {
