@@ -15,8 +15,8 @@ const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 export class UserController {
     static async getLoggedInUser(req, res, next) {
         const logger = req.logger;
-        // const bearerToken = req.bearerToken;
-        const bearerToken = process.env.OMIHO_PROXY_BEARER_TOKEN;
+        const bearerToken = req.bearerToken;
+        // const bearerToken = process.env.OMIHO_PROXY_BEARER_TOKEN;
 
         try {
             let omihoResponse;
@@ -48,7 +48,7 @@ export class UserController {
                 .where('sso_id', userInfo.id)
                 .andWhere('employee_identification_number', userInfo.nik)
                 .andWhere('email', userInfo.email)
-                .andWhere('branch_code', userInfo.branch_code,)
+                .andWhere('branch_code', userInfo.branch_code, )
                 .andWhere('role_id', userInfo.role_id)
                 .first();
 
