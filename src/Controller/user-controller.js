@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
@@ -18,7 +19,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 
 export class UserController {
     static async getLoggedInUser(req, res, next) {
-        const bearerToken = req.body.bearerToken;
+        const bearerToken = req.body.bearer_token;
 
         try {
             if (!bearerToken) {
@@ -126,7 +127,8 @@ export class UserController {
                     'users.email as email',
                     'master_branches.branch_code as branch_code',
                     'master_branches.branch_name as branch_name',
-                    'roles.name as role_name'
+                    'roles.name as role_name',
+                    'roles.id as role_id'
                 )
                 .join('roles', 'roles.id', '=', 'users.role_id')
                 .join('master_branches', 'master_branches.branch_code', '=', 'users.branch_code')
@@ -154,11 +156,22 @@ export class UserController {
                 role_name: userFromLocalDb.role_name
             };
 
+            const payload = {
+                userId: userFromLocalDb.id,
+                name: userFromLocalDb.user_name,
+                email: userFromLocalDb.email,
+                role: userFromLocalDb.role_name,
+                role_id: userFromLocalDb.role_id,
+            };
+
+            const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
             return res.status(200).json({
                 status_code: 200,
                 status: 'success',
                 message: 'Get Data User Successfully',
-                data: formattedUserData
+                data: formattedUserData,
+                token: token
             });
 
         } catch (error) {
