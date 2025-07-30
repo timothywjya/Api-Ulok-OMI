@@ -1,57 +1,39 @@
-import axios from 'axios';
-import dotenv from 'dotenv';
-import { CustomError } from '../Error/error-handling.js';
+// src/Middleware/authMiddleware.js
+import jwt from 'jsonwebtoken';
+import { CustomError } from '../Error/error-handling.js'; // Pastikan path benar
 
-dotenv.config();
+const JWT_SECRET = process.env.JWT_SECRET; // Pastikan ini diakses dengan benar
 
-const OMIHO_API_ENDPOINT_USER = process.env.OMIHO_API_BASE_URL;
-const OMIHO_PROXY_BEARER_TOKEN = process.env.OMIHO_PROXY_BEARER_TOKEN;
-const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
+export const authenticateToken = (req, res, next) => {
+    // Ambil token dari header Authorization (biasanya format: Bearer TOKEN_ANDA)
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Ambil bagian TOKEN_ANDA
 
-export const getLoggedInUser = async (req, res, next) => {
-    const logger = req.logger;
-    // const bearerToken = req.bearerToken;
-    const bearerToken = process.env.OMIHO_PROXY_BEARER_TOKEN;
-
-    try {
-        let omihoResponse;
-
-        const requestBodyToOmiho = {
-            client_id: OAUTH_CLIENT_ID
-        };
-
-        omihoResponse = await axios.post(OMIHO_API_ENDPOINT_USER, requestBodyToOmiho, {
-            headers: {
-                'Authorization': `Bearer ${bearerToken}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 10000
-        });
-
-        const userInfo = omihoResponse.data.data;
-
-        if (!userInfo || userInfo.role_id == 'b51fac8f3a') {
-            return next(new CustomError(
-                'Failed to connect SSO OMI.',
-                404,
-                'Error',
-                'User Data is not Found.'
-            ));
-        }
-
-        res.status(200).json({
-            status_code: 200,
-            status: 'success',
-            message: 'Get Info Login Successfully',
-            data: userInfo
-        });
-
-    } catch (error) {
+    if (!token) {
+        // Jika tidak ada token, kembalikan 401 Unauthorized
         return next(new CustomError(
-            'Failed to Connect SSO-OMIHO',
-            404,
-            'Error',
-            error.message
+            'Authentication Failed',
+            401,
+            'Unauthorized',
+            'Access token is missing. Please log in.'
         ));
     }
+
+    // Verifikasi token
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            // Jika token tidak valid atau kadaluarsa, kembalikan 403 Forbidden
+            // (Kadaluarsa juga menghasilkan error, jadi ini akan menangkapnya)
+            console.error('JWT Verification Error:', err.message);
+            return next(new CustomError(
+                'Invalid or Expired Token',
+                403,
+                'Forbidden',
+                'Your access token is invalid or has expired. Please log in again.'
+            ));
+        }
+        // Jika token valid, simpan informasi user dari payload token di objek request
+        req.user = user; // Sekarang Anda bisa mengakses req.user.id, req.user.role_name, dll. di rute berikutnya
+        next(); // Lanjutkan ke handler rute berikutnya
+    });
 };

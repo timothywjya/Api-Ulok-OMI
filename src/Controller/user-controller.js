@@ -33,6 +33,7 @@ export class UserController {
             }
 
             let omihoResponse;
+
             try {
                 omihoResponse = await axios.post(OMIHO_API_ENDPOINT_USER, {
                     client_id: OAUTH_CLIENT_ID
@@ -45,7 +46,7 @@ export class UserController {
                 });
             } catch (omihoError) {
                 const errData = omihoError.response && omihoError.response.data ? omihoError.response.data : {};
-                const errMsg = errData.message ? errData.message : 'Gagal menghubungi OMIHO API.';
+                const errMsg = errData.message ? errData.message : 'Failed to Call OMIHO API.';
                 const errCode = omihoError.response && omihoError.response.status ? omihoError.response.status : 401;
 
                 return next(new CustomError(
@@ -53,7 +54,7 @@ export class UserController {
                     JSON.stringify({ client_id: OAUTH_CLIENT_ID }),
                     'Unauthorized',
                     errCode,
-                    'Gagal mengambil data pengguna',
+                    'Failed to Get Data User',
                     errMsg
                 ));
             }
@@ -66,8 +67,8 @@ export class UserController {
                     JSON.stringify(omihoResponse.data),
                     'Invalid Response',
                     502,
-                    'Data dari OMIHO tidak valid',
-                    'Field ID tidak ditemukan dalam response OMIHO.'
+                    'A Data from OMI HO is not Valid',
+                    'SSO ID Field is Not Found in response OMIHO.'
                 ));
             }
 
@@ -81,8 +82,8 @@ export class UserController {
                     JSON.stringify({ role_id: userInfo.role_id }),
                     'Role Not Found',
                     404,
-                    'Role tidak ditemukan',
-                    'Role dengan OAuth Role ID tersebut tidak ada di sistem lokal.'
+                    'Role is Not Found',
+                    'Roe OAuth in OMIHO is not Found in Survey Lokasi OMI'
                 ));
             }
 
@@ -123,7 +124,8 @@ export class UserController {
                     'users.name as user_name',
                     'users.employee_identification_number as nik',
                     'users.email as email',
-                    db.raw("CONCAT(master_branches.branch_code, ' - ', master_branches.branch_name) AS branch_name"),
+                    'master_branches.branch_code as branch_code',
+                    'master_branches.branch_name as branch_name',
                     'roles.name as role_name'
                 )
                 .join('roles', 'roles.id', '=', 'users.role_id')
@@ -131,15 +133,14 @@ export class UserController {
                 .where('users.id', localUserId)
                 .first();
 
-            // Cegatan 5: Data user lokal gagal ditemukan setelah insert/update
             if (!userFromLocalDb) {
                 return next(new CustomError(
                     req.originalUrl,
                     JSON.stringify({ user_id: localUserId }),
                     'User Not Found',
                     404,
-                    'Data pengguna tidak ditemukan setelah penyimpanan',
-                    'Gagal mengambil data pengguna dari database lokal setelah penyimpanan.'
+                    'Data User is not Found after insert Data',
+                    'Failed to Get Data after Insert Data User'
                 ));
             }
 
@@ -148,6 +149,7 @@ export class UserController {
                 name: userFromLocalDb.user_name,
                 nik: userFromLocalDb.nik,
                 email: userFromLocalDb.email,
+                branch_code: userFromLocalDb.branch_code,
                 branch_name: userFromLocalDb.branch_name,
                 role_name: userFromLocalDb.role_name
             };
@@ -165,7 +167,7 @@ export class UserController {
                 JSON.stringify(req.body || {}),
                 'Internal Server Error',
                 500,
-                'Terjadi kesalahan tak terduga',
+                'Oops Something Wrong',
                 error.message || 'Unknown error in getLoggedInUser'
             ));
         }
