@@ -8,9 +8,9 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 
 export class SurveyController {
     static async getDataSurveyLocation(req, res, next) {
-        const encryptedImplementedById = req.query.implementedBy;
+        const encryptedImplementedById = req.query.implemented_by;
         // const encryptedSurveyTypeId = req.query.surveyType;
-        const branchCode = req.query.branchCode;
+        const branchCode = req.query.branch_code;
 
         const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
         // const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
@@ -34,10 +34,31 @@ export class SurveyController {
                     'users.branch_code',
                     db.raw("DATE_FORMAT(survey_headers.implementation_date, '%e %M %Y') AS survey_date"),
                     db.raw("CASE WHEN survey_headers.is_visited = 1 THEN 'SUDAH DIKUNJUNGI' ELSE 'BELUM DIKUNJUNGI' END AS visit_status"),
-                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN 'BERPOTENSI' ELSE 'KURANG BERPOTENSI' END AS prospect_status")
+                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN 'BERPOTENSI' ELSE 'KURANG BERPOTENSI' END AS prospect_status"),
+                    'master_identities.full_name as member_fullname',
+                    'master_identities.phone_number as member_phone',
+                    'store_locations.province as member_province',
+                    'store_locations.city as member_city',
+                    'store_locations.district as member_district',
+                    'store_locations.sub_district as member_sub_district',
+                    'store_locations.address as member_address',
+                    'store_locations.postal_code as member_postal_code',
+                    'store_locations.customer_type as member_customer_type',
+                    'store_locations.survey_information_source as member_survey_information_source',
+                    'store_locations.ownership_status as member_ownership_status',
+                    'store_locations.site_type as member_site_type',
+                    'store_locations.length as member_length',
+                    'store_locations.width as member_width',
+                    'store_locations.total_floors as member_total_floors',
+                    'store_locations.longitude as member_longitude',
+                    'store_locations.latitude as member_latitude',
+                    'store_locations.personnel_status as member_personnel_status',
+                    'store_locations.notes as member_notes'
                 )
                 .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
                 .join('users', 'users.id', '=', 'survey_headers.implemented_by')
+                .join('store_locations', 'store_locations.id', '=', 'survey_headers.store_location_id')
+                .join('master_identities', 'store_locations.identity_id', '=', 'master_identities.id')
                 .where('survey_headers.implemented_by', implementedById)
                 .whereNull('survey_headers.check_in')
                 .whereNull('survey_headers.check_out')
@@ -79,7 +100,7 @@ export class SurveyController {
         const surveyIds = req.query.survey_ids;
 
         const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
-        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEYii;
+        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
@@ -134,7 +155,7 @@ export class SurveyController {
                     ...rest
                 };
             });
-
+            console.log('Data siap dikirim.');
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',

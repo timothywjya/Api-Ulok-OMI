@@ -84,7 +84,7 @@ export class UserController {
                     'Role Not Found',
                     404,
                     'Role is Not Found',
-                    'Roe OAuth in OMIHO is not Found in Survey Lokasi OMI'
+                    'Role OAuth in OMIHO is not Found in Survey Lokasi OMI'
                 ));
             }
 
