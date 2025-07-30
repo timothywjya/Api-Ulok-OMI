@@ -3,60 +3,92 @@ import dotenv from 'dotenv';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
-import NodeHashIds from '../Utils/Hashids.js'; // Pastikan path ini benar dan NodeHashIds diekspor dengan benar
+import NodeHashIds from '../Utils/Hashids.js';
 
 const db = knex(knexConfig[process.env.NODE_ENV || 'development']);
 dotenv.config();
 
-const OMIHO_API_ENDPOINT_USER = process.env.OMIHO_API_BASE_URL;
 // const OMIHO_PROXY_BEARER_TOKEN = process.env.OMIHO_PROXY_BEARER_TOKEN; 
+
+const OMIHO_API_ENDPOINT_USER = process.env.OMIHO_API_BASE_URL;
 const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 
 export class UserController {
     static async getLoggedInUser(req, res, next) {
         const bearerToken = req.body.bearerToken;
 
         try {
-            const requestBodyToOmiho = {
-                client_id: OAUTH_CLIENT_ID
-            };
+            if (!bearerToken) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.body || {}),
+                    'Bad Request',
+                    400,
+                    'Authentication Required',
+                    'Bearer token must be provided in the request body.'
+                ));
+            }
 
-            const omihoResponse = await axios.post(OMIHO_API_ENDPOINT_USER, requestBodyToOmiho, {
-                headers: {
-                    'Authorization': `Bearer ${bearerToken}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            });
+            let omihoResponse;
+            try {
+                omihoResponse = await axios.post(OMIHO_API_ENDPOINT_USER, {
+                    client_id: OAUTH_CLIENT_ID
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${bearerToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 10000
+                });
+            } catch (omihoError) {
+                const errData = omihoError.response && omihoError.response.data ? omihoError.response.data : {};
+                const errMsg = errData.message ? errData.message : 'Gagal menghubungi OMIHO API.';
+                const errCode = omihoError.response && omihoError.response.status ? omihoError.response.status : 401;
+
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify({ client_id: OAUTH_CLIENT_ID }),
+                    'Unauthorized',
+                    errCode,
+                    'Gagal mengambil data pengguna',
+                    errMsg
+                ));
+            }
 
             const userInfo = omihoResponse.data.data;
 
-            const existingUser = await db('users')
-                .where('sso_id', userInfo.id)
-                .first();
+            if (!userInfo || !userInfo.id) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(omihoResponse.data),
+                    'Invalid Response',
+                    502,
+                    'Data dari OMIHO tidak valid',
+                    'Field ID tidak ditemukan dalam response OMIHO.'
+                ));
+            }
 
             const getRole = await db('roles')
                 .where('oauth_role_id', userInfo.role_id)
                 .first();
 
-            // if (!getRole) {
-            //     return next(new CustomError(
-            //         'Role Configuration Error',
-            //         500,
-            //         'Internal Server Error',
-            //         `User role '${userInfo.role_id}' from OMIHO is not configured in the local system. Please update role mappings.`
-            //     ));
-            // }
+            if (!getRole) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify({ role_id: userInfo.role_id }),
+                    'Role Not Found',
+                    404,
+                    'Role tidak ditemukan',
+                    'Role dengan OAuth Role ID tersebut tidak ada di sistem lokal.'
+                ));
+            }
 
-            // if (getRole.name !== "Sr. Clerk" && getRole.name !== "Supervisor") {
-            //     // return next(new CustomError(
-            //     //     'Unauthorized Access',
-            //     //     403,
-            //     //     'Access Denied',
-            //     //     `Your role ('${getRole.name}') is not authorized to log in.`
-            //     // ));
-            // }
+            const existingUser = await db('users')
+                .where('sso_id', userInfo.id)
+                .first();
 
             const userDataToSave = {
                 sso_id: userInfo.id,
@@ -75,19 +107,13 @@ export class UserController {
                     ...userDataToSave,
                     created_at: new Date()
                 }).returning('id');
-                localUserId = newId;
-                console.log(1);
+
+                localUserId = typeof newId === 'object' ? newId.id : newId;
             } else {
                 await db('users')
                     .where('sso_id', userInfo.id)
-                    .update({
-                        name: userInfo.name,
-                        email: userInfo.email,
-                        employee_identification_number: userInfo.nik,
-                        branch_code: userInfo.branch_code,
-                        role_id: getRole.id,
-                        updated_at: new Date()
-                    });
+                    .update(userDataToSave);
+
                 localUserId = existingUser.id;
             }
 
@@ -105,6 +131,18 @@ export class UserController {
                 .where('users.id', localUserId)
                 .first();
 
+            // Cegatan 5: Data user lokal gagal ditemukan setelah insert/update
+            if (!userFromLocalDb) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify({ user_id: localUserId }),
+                    'User Not Found',
+                    404,
+                    'Data pengguna tidak ditemukan setelah penyimpanan',
+                    'Gagal mengambil data pengguna dari database lokal setelah penyimpanan.'
+                ));
+            }
+
             const formattedUserData = {
                 ids: NodeHashIds.encode(userFromLocalDb.id, USER_SECRET_KEY),
                 name: userFromLocalDb.user_name,
@@ -114,7 +152,7 @@ export class UserController {
                 role_name: userFromLocalDb.role_name
             };
 
-            res.status(200).json({
+            return res.status(200).json({
                 status_code: 200,
                 status: 'success',
                 message: 'Get Data User Successfully',
@@ -122,10 +160,18 @@ export class UserController {
             });
 
         } catch (error) {
-
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.body || {}),
+                'Internal Server Error',
+                500,
+                'Terjadi kesalahan tak terduga',
+                error.message || 'Unknown error in getLoggedInUser'
+            ));
         }
-    };
+    }
 }
+
 
 export class UserPublicController {
     static async getPublicDataUser(req, res, next) {
