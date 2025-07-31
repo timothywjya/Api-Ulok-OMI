@@ -8,20 +8,11 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 
 export class SurveyController {
     static async getDataSurveyLocation(req, res, next) {
-        const encryptedImplementedById = req.query.implemented_by;
-        // const encryptedSurveyTypeId = req.query.surveyType;
         const branchCode = req.query.branch_code;
-
-        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
-        // const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
-            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
-            let implementedById = parseInt(decryptedImplementedById);
-
-            // const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
-            // let surveyTypeId = parseInt(decryptedSurveyTypeId);
+            let implementedById = req.user.userId;
 
             const rawData = await db('survey_headers')
                 .select(
@@ -240,18 +231,12 @@ export class SurveyController {
     }
 
     static async getDataSurveyMonitoring(req, res, next) {
-        const encryptedImplementedById = req.query.implemented_by;
         const branchCode = req.query.branch_code;
         const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
-        // const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
         const MONITORING_SECRET_KEY = process.env.MONITORING_SECRET_KEY;
 
         try {
-            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
-            let implementedById = parseInt(decryptedImplementedById);
-            console.log(implementedById);
-            // const decryptedSurveyTypeId = NodeHashIds.decode(encryptedSurveyTypeId, SURVEY_TYPE_SECRET_KEY);
-            // let surveyTypeId = parseInt(decryptedSurveyTypeId);
+            let implementedById = req.user.userId
 
             const rawData = await db('survey_headers')
                 .select(
