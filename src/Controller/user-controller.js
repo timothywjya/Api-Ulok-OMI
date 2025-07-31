@@ -88,6 +88,8 @@ export class UserController {
                 ));
             }
 
+            // Setting tanpa BDHO
+
             const existingUser = await db('users')
                 .where('sso_id', userInfo.id)
                 .first();
