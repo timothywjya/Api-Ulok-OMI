@@ -145,11 +145,13 @@ export class SurveyController {
                 };
             });
 
+            const combinedData = [...dataQuestion, ...dataOption];
+
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
                 message: 'Get Data Question and Options Survey Location Sucessfully',
-                data: [dataQuestion, dataOption]
+                data: combinedData
             });
 
         } catch (error) {
@@ -163,70 +165,19 @@ export class SurveyController {
     }
 
     static async insertDataSurveyLocation(req, res, next) {
-        const surveyIds = req.query.survey_ids;
-        const encryptedImplementedById = req.query.implementedBy;
-        const branchCode = req.query.branchCode;
-
-        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
-        const SURVEY_TYPE_SECRET_KEY = process.env.SURVEY_TYPE_SECRET_KEY;
+        const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
+        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
+        const { data } = req.body;
+        const userId = req.user.id;
+
         try {
-            const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
-            let IdSurvey = parseInt(surveyId);
+            data.forEach(element => {
 
-            const decryptedImplementedById = NodeHashIds.decode(encryptedImplementedById, USER_SECRET_KEY);
-            let implementedById = parseInt(decryptedImplementedById);
-
-            const rawData = await db('survey_headers')
-                .select(
-                    'survey_headers.id as header_id',
-                    db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    db.raw("DATE_FORMAT(survey_headers.check_in, '%d-%m-%Y %H:%i') AS check_in"),
-                    db.raw("DATE_FORMAT(survey_headers.check_out, '%d-%m-%Y %H:%i') AS check_out"),
-                    'users.name',
-                    'users.employee_identification_number as nik',
-                    'users.branch_code',
-                    db.raw("DATE_FORMAT(survey_headers.implementation_date, '%e %M %Y') AS survey_date"),
-                    db.raw("CASE WHEN survey_headers.is_visited = 1 THEN 'SUDAH DIKUNJUNGI' ELSE 'BELUM DIKUNJUNGI' END AS visit_status"),
-                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN 'BERPOTENSI' ELSE 'KURANG BERPOTENSI' END AS prospect_status")
-                )
-                .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
-                .join('users', 'users.id', '=', 'survey_headers.implemented_by')
-                .where('survey_headers.implemented_by', implementedById)
-                .whereNull('survey_headers.check_in')
-                .whereNull('survey_headers.check_out')
-                .andWhere('master_survey_types.id', surveyTypeId)
-                .andWhere('survey_headers.branch_code', branchCode)
-                .andWhereRaw('survey_headers.implementation_date >= NOW()')
-                .andWhere('survey_headers.is_visited', 0);
-
-            const data = rawData.map(item => {
-                const {
-                    header_id,
-                    ...rest
-                } = item;
-
-                return {
-                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
-                    ...rest
-                };
             });
-
-            res.status(200).json({
-                status: 'Success',
-                status_code: '200',
-                message: 'Get Data Survey Sucessfully',
-                data: data
-            });
-
         } catch (error) {
-            next(new CustomError(
-                'Failed to Get Data Survey Location',
-                error.statusCode || 500,
-                'Error',
-                error.message
-            ));
+
         }
     }
 
@@ -368,11 +319,13 @@ export class SurveyController {
                 };
             });
 
+            const combinedData = [...dataQuestion, ...dataOption];
+
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
                 message: 'Get Data Question and Options Survey Monitoring Sucessfully',
-                data: [dataQuestion, dataOption]
+                data: combinedData
             });
 
         } catch (error) {

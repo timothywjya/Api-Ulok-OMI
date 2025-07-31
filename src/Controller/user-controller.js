@@ -9,8 +9,6 @@ import NodeHashIds from '../Utils/Hashids.js';
 const db = knex(knexConfig[process.env.NODE_ENV || 'development']);
 dotenv.config();
 
-// const OMIHO_PROXY_BEARER_TOKEN = process.env.OMIHO_PROXY_BEARER_TOKEN; 
-
 const OMIHO_API_ENDPOINT_USER = process.env.OMIHO_API_BASE_URL;
 const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
@@ -130,7 +128,7 @@ export class UserController {
                     'master_branches.branch_code as branch_code',
                     'master_branches.branch_name as branch_name',
                     'roles.name as role_name',
-                    'roles.id as role_id'
+                    'roles.oauth_role_id as role_id'
                 )
                 .join('roles', 'roles.id', '=', 'users.role_id')
                 .join('master_branches', 'master_branches.branch_code', '=', 'users.branch_code')
@@ -150,6 +148,7 @@ export class UserController {
 
             const formattedUserData = {
                 ids: NodeHashIds.encode(userFromLocalDb.id, USER_SECRET_KEY),
+                role_ids: userFromLocalDb.role_id,
                 name: userFromLocalDb.user_name,
                 nik: userFromLocalDb.nik,
                 email: userFromLocalDb.email,
@@ -163,7 +162,7 @@ export class UserController {
                 name: userFromLocalDb.user_name,
                 email: userFromLocalDb.email,
                 role: userFromLocalDb.role_name,
-                role_id: userFromLocalDb.role_id,
+                role_ids: userFromLocalDb.role_id,
                 branch_code: userFromLocalDb.branch_code,
             };
 
