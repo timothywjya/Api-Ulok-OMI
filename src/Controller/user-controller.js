@@ -164,6 +164,7 @@ export class UserController {
                 email: userFromLocalDb.email,
                 role: userFromLocalDb.role_name,
                 role_id: userFromLocalDb.role_id,
+                branch_code: userFromLocalDb.branch_code,
             };
 
             const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });

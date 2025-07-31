@@ -8,7 +8,7 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 
 export class SurveyController {
     static async getDataSurveyLocation(req, res, next) {
-        const branchCode = req.query.branch_code;
+        const branchCode = req.user.branch_code;
         const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 
         try {
@@ -231,8 +231,7 @@ export class SurveyController {
     }
 
     static async getDataSurveyMonitoring(req, res, next) {
-        const branchCode = req.query.branch_code;
-        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+        const branchCode = req.user.branch_code;
         const MONITORING_SECRET_KEY = process.env.MONITORING_SECRET_KEY;
 
         try {
