@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
+import NodeHashIds from '../Utils/Hashids.js';
 
 dotenv.config();
 
@@ -34,15 +35,18 @@ const errorHandler = async (err, req, res, next) => {
         log_message: clientMessage,
         log_error_message: errorMessage,
         log_created_at: db.fn.now(),
-        log_created_by: 1
+        log_created_by: NodeHashIds.decode(req.user.userIds, process.env.USER_SECRET_KEY)
     };
-
 
     try {
         await db('logs').insert(logData);
 
     } catch (dbError) {
 
+    }
+
+    if (process.env.NODE_ENV.toUpperCase() == "PRODUCTION") {
+        errorMessage = "Server Error"
     }
 
     res.status(statusCode).json({

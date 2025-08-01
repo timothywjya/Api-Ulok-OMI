@@ -86,7 +86,17 @@ export class UserController {
                 ));
             }
 
-            // Setting tanpa BDHO
+            // if (userInfo == "b51fac8f3a") { // Checking by Constanta
+            //     // Setting selain SPV dan Clerk dilarang masuk
+            //     return next(new CustomError(
+            //         req.originalUrl,
+            //         JSON.stringify(req.body || {}),
+            //         'Internal Server Error',
+            //         500,
+            //         'Oops Something Wrong',
+            //         error.message || 'Unknown error in getLoggedInUser'
+            //     ));
+            // }
 
             const existingUser = await db('users')
                 .where('sso_id', userInfo.id)
@@ -158,7 +168,7 @@ export class UserController {
             };
 
             const payload = {
-                userId: userFromLocalDb.id,
+                userIds: NodeHashIds.encode(userFromLocalDb.id, USER_SECRET_KEY),
                 name: userFromLocalDb.user_name,
                 email: userFromLocalDb.email,
                 role: userFromLocalDb.role_name,

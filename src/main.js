@@ -46,6 +46,8 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use('/images', express.static('images'));
+
 app.use((req, res, next) => {
     req.logger = logger;
     req.db = db;
@@ -53,18 +55,14 @@ app.use((req, res, next) => {
 });
 
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
-
 app.use('/', publicRoutes);
-
 app.use('/api', privateRoutes);
-
 app.use('*', (req, res, next) => {
     req.logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
     next(new ApiError(404, `Endpoint tidak ditemukan: ${req.method} ${req.originalUrl}`));
 });
 
 app.use(errorHandler);
-
 app.listen(PORT, () => {
     logger.info(`Server berjalan di http://127.0.0.1:${PORT} pada mode ${process.env.NODE_ENV}`);
 });

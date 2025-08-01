@@ -6,36 +6,39 @@ import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
 const db = knex(knexConfig[process.env.NODE_ENV]);
 
-class RecommendationController {
+export class RecommendationController {
     static async getDataListRecommendedLocation(req, res, next) {
-        const RECOMMENDED_LOCATION_SECRET_KEY = env.process.RECOMMENDATION_LOCATION_SECRET_KEY;
-        const recommendedBy = req.query.recommended_by;
+        const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
+        const recommendedBy = req.user.userIds;
 
         try {
-            const decryptedRecommendedById = decryptId(recommendedBy, USER_SECRET_KEY);
+            const decryptedRecommendedById = NodeHashIds.decode(recommendedBy, process.env.USER_SECRET_KEY);
             let RecommendedById = parseInt(decryptedRecommendedById);
 
             const rawData = await db('recommended_locations')
                 .select(
-                    'id',
+                    'recommended_locations.id',
                     'longitude',
                     "latitude",
                     "keterangan",
-                    "recommended_by",
+                    "recommend_by",
                     "users.name as name",
                     "employee_identification_number as nik"
                 )
-                .join('users', 'users.id', '=', 'recommended_locations.recommended_by')
-                .where('recommended_by', RecommendedById);
+                .join('users', 'users.id', '=', 'recommended_locations.recommend_by')
+                .where('recommend_by', RecommendedById)
+                .andWhere('recommended_locations.branch_code', req.user.branch_code);
 
             const data = rawData.map(item => {
                 const {
                     id,
+                    recommend_by,
                     ...rest
                 } = item;
 
                 return {
-                    ids: NodeHashIds.encode(header_id, RECOMMENDED_LOCATION_SECRET_KEY),
+                    ids: NodeHashIds.encode(id, RECOMMENDED_LOCATION_SECRET_KEY),
+                    recommend_ids: NodeHashIds.encode(recommend_by, process.env.USER_SECRET_KEY),
                     ...rest
                 };
             });
@@ -48,34 +51,33 @@ class RecommendationController {
             });
 
         } catch (error) {
-            next(new CustomError(
-                'Failed to Get Data Survey Location',
-                error.statusCode || 500,
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.body || {}),
+                'Failed to Get Data Survey',
+                500,
                 'Error',
-                error.message
+                error.message || 'An unexpected error occurred'
             ));
         }
     }
 
     static async getDataDetailRecommendedLocation(req, res, next) {
-        const USER_SECRET_KEY = env.process.USER_SECRET_KEY;
-        const RecommendedId = req.query.RecommendedId;
-
+        const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
+        const recommendedBy = req.query.recommended_ids;
+        console.log(recommendedBy);
         try {
-            const decryptedRecommendedId = decryptId(RecommendedId, USER_SECRET_KEY);
+            const decryptedRecommendedId = NodeHashIds.decode(recommendedBy, process.env.RECOMMENDATION_LOCATION_SECRET_KEY);
             let RecLocId = parseInt(decryptedRecommendedId);
 
-            const rawData = await db('recommended_locations')
+            const rawData = await db('images')
                 .select(
                     'id',
-                    'longitude',
-                    "latitude",
-                    "keterangan",
-                    "recommended_by",
-                    "users.name as name",
-                    "employee_identification_number as nik"
+                    'recommend_id',
+                    "photo as photo_url",
                 )
-                .where('id', RecLocId);
+                .where('recommend_id', RecLocId)
+                .whereNotNull('recommend_id');
 
             const data = rawData.map(item => {
                 const {
@@ -84,7 +86,7 @@ class RecommendationController {
                 } = item;
 
                 return {
-                    ids: NodeHashIds.encode(header_id, RECOMMENDED_LOCATION_SECRET_KEY),
+                    ids: NodeHashIds.encode(id, IMAGE_SECRET_KEY),
                     ...rest
                 };
             });
@@ -92,17 +94,18 @@ class RecommendationController {
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Recommended Location Sucessfully',
-                data_header: data,
-                data_images: image
+                message: 'Get Data Image Recommended Location Sucessfully',
+                data_images: data
             });
 
         } catch (error) {
-            next(new CustomError(
-                'Failed to Get Data Survey Location',
-                error.statusCode || 500,
-                'Error',
-                error.message
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.body || {}),
+                'Internal Server Error',
+                500,
+                'Oops Something Wrong',
+                error.message || 'Unknown error in get Photo'
             ));
         }
     }
