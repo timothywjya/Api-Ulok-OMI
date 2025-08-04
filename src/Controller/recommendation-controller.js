@@ -14,13 +14,7 @@ export class RecommendationController {
     static async getDataListRecommendedLocation(req, res, next) {
         const recommendedBy = req.user.userIds;
 
-        const decryptedRecommendedId = NodeHashIds.decode(recommendedBy, process.env.RECOMMENDATION_LOCATION_SECRET_KEY);
-        let RecLocId = parseInt(decryptedRecommendedId);
-
         try {
-            const decryptedRecommendedById = NodeHashIds.decode(recommendedBy, process.env.USER_SECRET_KEY);
-            let RecommendedById = parseInt(decryptedRecommendedById);
-
             const rawLocations = await db('recommended_locations')
                 .select(
                     'recommended_locations.id',
