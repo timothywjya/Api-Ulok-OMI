@@ -24,7 +24,6 @@ export const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            console.error('JWT Verification Error:', err.message);
             return next(new CustomError(
                 req.originalUrl,
                 JSON.stringify(req.headers || {}),
