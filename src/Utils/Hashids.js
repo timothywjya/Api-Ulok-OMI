@@ -21,7 +21,7 @@ class NodeHashIds {
     }
 
     static decode(hash, salt) {
-        const effectiveSalt = salt || DEFAULT_SALT_KEY; // Gunakan salt yang diberikan atau default
+        const effectiveSalt = salt || DEFAULT_SALT_KEY;
         const hashids = NodeHashIds._createHashidsInstance(effectiveSalt);
         const decoded = hashids.decode(hash);
         return decoded.length > 0 ? decoded[0] : null;

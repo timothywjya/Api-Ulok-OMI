@@ -54,6 +54,13 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use(fileUpload({
+    limits: { fileSize: 5 * 1024 * 1024 },
+    abortOnLimit: true,
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
+
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 app.use('/', publicRoutes);
 app.use('/api', privateRoutes);

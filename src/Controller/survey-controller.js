@@ -168,16 +168,16 @@ export class SurveyController {
 
     static async insertDataSurveyLocation(req, res, next) {
         const userId = NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY);
-        const { data, check_in, check_out, is_prospect, survey_header_ids } = req.body;
+        const { check_in, check_out, is_prospect, survey_header_ids, answer } = req.body.data;
 
-        if (!data || !Array.isArray(data) || data.length === 0) {
+        if (!answer || !Array.isArray(answer) || answer.length === 0) {
             return next(new CustomError(
                 req.originalUrl,
                 JSON.stringify(req.headers || {}),
                 'Validation Error',
                 400,
                 'Bad Request',
-                'Request body must contain a non-empty "data" array.'
+                'Request body must contain a non-empty "data.answer" array.'
             ));
         }
 
@@ -199,7 +199,7 @@ export class SurveyController {
                     .where('id', decodedSurveyHeaderId)
                     .update(headerUpdateData);
 
-                for (const element of data) {
+                for (const element of answer) {
                     const question_id_decoded = NodeHashIds.decode(element.question_ids, QUESTION_SECRET_KEY);
                     const decodedQuestionId = parseInt(question_id_decoded);
 
@@ -239,92 +239,7 @@ export class SurveyController {
 
             } catch (error) {
                 await trx.rollback();
-                next(new CustomError(
-                    req.originalUrl,
-                    JSON.stringify(req.headers || {}),
-                    'Database Transaction Error',
-                    400,
-                    'Error',
-                    error.message || 'Failed to save data, please try again.'
-                ));
-            }
-        });
-    }
-
-    static async insertDataRecommendation(req, res, next) {
-        const userId = NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY);
-        const { data, check_in, check_out, is_prospect, survey_header_ids } = req.body;
-
-        if (!data || !Array.isArray(data) || data.length === 0) {
-            return next(new CustomError(
-                req.originalUrl,
-                JSON.stringify(req.headers || {}),
-                'Validation Error',
-                400,
-                'Bad Request',
-                'Request body must contain a non-empty "data" array.'
-            ));
-        }
-
-        const survey_header_id_decoded = NodeHashIds.decode(survey_header_ids, LOCATION_SECRET_KEY);
-        const decodedSurveyHeaderId = parseInt(survey_header_id_decoded);
-
-        await db.transaction(async trx => {
-            try {
-                const headerUpdateData = {
-                    check_in: check_in || db.fn.now(),
-                    check_out: check_out || db.fn.now(),
-                    is_prospect: is_prospect,
-                    is_visited: 1,
-                    updated_by: userId,
-                    updated_at: db.fn.now()
-                };
-
-                await trx('survey_headers')
-                    .where('id', decodedSurveyHeaderId)
-                    .update(headerUpdateData);
-
-                for (const element of data) {
-                    const question_id_decoded = NodeHashIds.decode(element.question_ids, QUESTION_SECRET_KEY);
-                    const decodedQuestionId = parseInt(question_id_decoded);
-
-                    let answer_id_to_insert = null;
-                    let answer_text_to_insert = element.answer_text || null;
-
-                    if (element.option_ids) {
-                        const option_id_decoded = NodeHashIds.decode(element.option_ids, OPTION_SECRET_KEY);
-                        answer_id_to_insert = parseInt(option_id_decoded);
-                    } else {
-                        answer_id_to_insert = null;
-                        answer_text_to_insert = element.answer_text;
-                    }
-
-                    const existingAnswer = await trx('survey_details')
-                        .where('survey_header_id', decodedSurveyHeaderId)
-                        .andWhere('question_id', decodedQuestionId)
-                        .first();
-
-                    await trx('survey_details')
-                        .where('id', existingAnswer.id)
-                        .update({
-                            answer_id: answer_id_to_insert,
-                            answer_text: answer_text_to_insert,
-                            updated_by: userId,
-                            updated_at: db.fn.now()
-                        });
-                }
-
-                await trx.commit();
-
-                res.status(200).json({
-                    status: 'success',
-                    status_code: 200,
-                    message: 'Survey data has been successfully saved.'
-                });
-
-            } catch (error) {
-                await trx.rollback();
-                next(new CustomError(
+                return next(new CustomError(
                     req.originalUrl,
                     JSON.stringify(req.headers || {}),
                     'Database Transaction Error',

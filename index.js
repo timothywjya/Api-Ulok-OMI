@@ -1,8 +1,7 @@
-// main_app_file.js (Sesuaikan nama file ini dengan file root Anda)
-
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import fileUpload from 'express-fileupload';
 import helmet from 'helmet';
 import knex from 'knex';
 import morgan from 'morgan';
@@ -32,6 +31,13 @@ const logger = winston.createLogger({
         new winston.transports.Console()
     ]
 });
+
+app.use(fileUpload({
+    limits: { fileSize: 5 * 1024 * 1024 },
+    abortOnLimit: true,
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
 
 const db = knex(knexConfig.development);
 
