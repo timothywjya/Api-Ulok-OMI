@@ -19,7 +19,7 @@ export class CustomError extends Error {
     }
 }
 
-const errorHandler = async (err, req, res, next) => {
+const errorHandler = async(err, req, res, next) => {
     const isCustomError = err instanceof CustomError;
 
     const statusCode = isCustomError && typeof err.code === 'number' ? err.code : 500;

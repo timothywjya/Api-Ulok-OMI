@@ -90,7 +90,7 @@ export class RecommendationController {
     static async insertRecommendedLocation(req, res, next) {
         const userId = req.user.userIds;
         const decodeUserId = NodeHashIds.decode(userId, USER_SECRET_KEY);
-        console.log("LAMA", userId, decodeUserId, "BARU")
+
         const { longitude, latitude, province, city, district, sub_district, postal_code, address, keterangan } = req.body;
 
         if (!longitude || !latitude || !province || !city || !district || !sub_district || !postal_code || !address) {
@@ -125,12 +125,17 @@ export class RecommendationController {
 
                 await trx('recommended_locations').insert(insertData);
 
+                const [recommendedId] = await trx('recommended_locations').insert(insertData, ['id']);
+                console.log(recommendedId);
+                const encodedRecommendedId = NodeHashIds.encode(recommendedId, RECOMMENDED_LOCATION_SECRET_KEY);
+
                 await trx.commit();
 
                 res.status(200).json({
                     status: 'Success',
                     status_code: '200',
                     message: 'Insert Data Recommended Locations Successfully',
+                    recommended: encodedRecommendedId
                 });
 
             } catch (error) {
@@ -147,50 +152,6 @@ export class RecommendationController {
             }
 
         });
-    }
-
-    static async insertRecommendedImages(req, res, next) {
-        try {
-            const query = await db('recommended_locations')
-                .select(
-                    'id',
-                    'longitude',
-                    "latitude",
-                    "keterangan",
-                    "recommended_by",
-                    "users.name as name",
-                    "employee_identification_number as nik"
-                )
-                .join('users', 'users.id', '=', 'recommended_locations.recommended_by')
-                .where('recommended_by', req.query.recommended_by);
-
-            const data = rawData.map(item => {
-                const {
-                    header_id,
-                    ...rest
-                } = item;
-
-                return {
-                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
-                    ...rest
-                };
-            });
-
-            res.status(200).json({
-                status: 'Success',
-                status_code: '200',
-                message: 'Get Data Survey Sucessfully',
-                data: data
-            });
-
-        } catch (error) {
-            next(new CustomError(
-                'Failed to Get Data Survey Location',
-                error.statusCode || 500,
-                'Error',
-                error.message
-            ));
-        }
     }
 }
 

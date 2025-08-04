@@ -79,6 +79,7 @@ export class ImageController {
                     const timestamp = Date.now();
                     const uniqueFilename = `${NodeHashIds.encode(timestamp)}${path.extname(photo.name)}`;
                     const filePath = path.join(uploadDir, uniqueFilename);
+
                     await photo.mv(filePath);
 
                     const insertData = {
@@ -100,7 +101,7 @@ export class ImageController {
 
                 res.status(200).json({
                     status: 'success',
-                    status_code: 201,
+                    status_code: 200,
                     message: 'Images have been successfully uploaded.',
                 });
 

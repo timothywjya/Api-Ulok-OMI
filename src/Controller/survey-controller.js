@@ -27,7 +27,7 @@ export class SurveyController {
                     'users.name',
                     'users.employee_identification_number as nik',
                     'users.branch_code',
-                    'survey_headers.implementation_date',
+                    db.raw("DATE_FORMAT(implementation_date, '%Y-%m-%d') AS implementation_date"),
                     db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
                     db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
                     'master_identities.full_name as member_fullname',
