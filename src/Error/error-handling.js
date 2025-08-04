@@ -35,7 +35,7 @@ const errorHandler = async (err, req, res, next) => {
         log_message: clientMessage,
         log_error_message: errorMessage,
         log_created_at: db.fn.now(),
-        log_created_by: NodeHashIds.decode(req.user.userIds, process.env.USER_SECRET_KEY)
+        log_created_by: NodeHashIds.decode(req.user.userIds, process.env.USER_SECRET_KEY) || '1'
     };
 
     try {

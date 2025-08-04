@@ -14,12 +14,10 @@ router.use(authenticateToken);
 router.get('/get-data-survey', SurveyController.getDataSurvey);
 router.get('/get-data-detail-survey', SurveyController.getDataDetailSurveyLocation);
 router.get('/get-data-recommendation-location', RecommendationController.getDataListRecommendedLocation);
-router.get('/get-data-detail-recommendation-location', RecommendationController.getDataDetailRecommendedLocation);
 router.post('/insert-data-survey', SurveyController.insertDataSurveyLocation);
-router.post('/insert-image-survey', SurveyController.insertDataSurveyLocation);
+// router.post('/insert-image-survey', SurveyController.insertDataSurveyLocation);
 
-router.post('/insert-image-recommendation', SurveyController.insertDataSurveyLocation);
-router.post('/insert-data-recommendation', SurveyController.insertDataSurveyLocation);
-
+router.post('/insert-data-recommendation', RecommendationController.insertRecommendedLocation);
+// router.post('/insert-image-recommendation', SurveyController.insertDataSurveyLocation);
 
 export default router;

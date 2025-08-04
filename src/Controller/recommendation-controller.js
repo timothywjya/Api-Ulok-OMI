@@ -6,48 +6,73 @@ import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
 const db = knex(knexConfig[process.env.NODE_ENV]);
 
+const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
+const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
+const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+
 export class RecommendationController {
     static async getDataListRecommendedLocation(req, res, next) {
-        const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
         const recommendedBy = req.user.userIds;
+
+        const decryptedRecommendedId = NodeHashIds.decode(recommendedBy, process.env.RECOMMENDATION_LOCATION_SECRET_KEY);
+        let RecLocId = parseInt(decryptedRecommendedId);
 
         try {
             const decryptedRecommendedById = NodeHashIds.decode(recommendedBy, process.env.USER_SECRET_KEY);
             let RecommendedById = parseInt(decryptedRecommendedById);
 
-            const rawData = await db('recommended_locations')
+            const rawLocations = await db('recommended_locations')
                 .select(
                     'recommended_locations.id',
+                    'recommend_by',
+                    'users.name as recommend_name',
+                    'employee_identification_number as recommend_nik',
                     'longitude',
-                    "latitude",
-                    "keterangan",
-                    "recommend_by",
-                    "users.name as name",
-                    "employee_identification_number as nik"
+                    'latitude',
+                    'keterangan'
                 )
                 .join('users', 'users.id', '=', 'recommended_locations.recommend_by')
                 .where('recommend_by', RecommendedById)
                 .andWhere('recommended_locations.branch_code', req.user.branch_code);
 
-            const data = rawData.map(item => {
+            const recommendedLocationIds = rawLocations.map(loc => loc.id);
+
+            const rawImages = await db('images')
+                .select(
+                    'id',
+                    'recommend_id',
+                    'photo as photo_url',
+                )
+                .whereIn('recommend_id', recommendedLocationIds)
+                .whereNotNull('recommend_id');
+
+            const combinedData = rawLocations.map(location => {
+                const locationImages = rawImages
+                    .filter(image => image.recommend_id === location.id)
+                    .map(image => ({
+                        ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
+                        photo_url: image.photo_url,
+                    }));
+
                 const {
                     id,
                     recommend_by,
                     ...rest
-                } = item;
+                } = location;
 
                 return {
                     ids: NodeHashIds.encode(id, RECOMMENDED_LOCATION_SECRET_KEY),
                     recommend_ids: NodeHashIds.encode(recommend_by, process.env.USER_SECRET_KEY),
-                    ...rest
+                    ...rest,
+                    images: locationImages,
                 };
             });
 
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Get Data Recommended Location Sucessfully',
-                data: data
+                message: 'Get Data Recommended Location Successfully',
+                data: combinedData
             });
 
         } catch (error) {
@@ -62,96 +87,66 @@ export class RecommendationController {
         }
     }
 
-    static async getDataDetailRecommendedLocation(req, res, next) {
-        const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
-        const recommendedBy = req.query.recommended_ids;
-        console.log(recommendedBy);
-        try {
-            const decryptedRecommendedId = NodeHashIds.decode(recommendedBy, process.env.RECOMMENDATION_LOCATION_SECRET_KEY);
-            let RecLocId = parseInt(decryptedRecommendedId);
+    static async insertRecommendedLocation(req, res, next) {
+        const userId = req.user.userIds;
+        const decodeUserId = NodeHashIds.decode(userId, USER_SECRET_KEY);
+        console.log("LAMA", userId, decodeUserId, "BARU")
+        const { longitude, latitude, province, city, district, sub_district, postal_code, address, keterangan } = req.body;
 
-            const rawData = await db('images')
-                .select(
-                    'id',
-                    'recommend_id',
-                    "photo as photo_url",
-                )
-                .where('recommend_id', RecLocId)
-                .whereNotNull('recommend_id');
-
-            const data = rawData.map(item => {
-                const {
-                    id,
-                    ...rest
-                } = item;
-
-                return {
-                    ids: NodeHashIds.encode(id, IMAGE_SECRET_KEY),
-                    ...rest
-                };
-            });
-
-            res.status(200).json({
-                status: 'Success',
-                status_code: '200',
-                message: 'Get Data Image Recommended Location Sucessfully',
-                data_images: data
-            });
-
-        } catch (error) {
+        if (!longitude || !latitude || !province || !city || !district || !sub_district || !postal_code || !address) {
             return next(new CustomError(
                 req.originalUrl,
-                JSON.stringify(req.body || {}),
-                'Internal Server Error',
-                500,
-                'Oops Something Wrong',
-                error.message || 'Unknown error in get Photo'
+                JSON.stringify(req.headers || {}),
+                'Validation Error',
+                400,
+                'Bad Request',
+                'Missing required fields in request body.'
             ));
         }
-    }
 
-    static async insertRecommendedLocation(req, res, next) {
-        try {
-            const query = await db('recommended_locations')
-                .select(
-                    'id',
-                    'longitude',
-                    "latitude",
-                    "keterangan",
-                    "recommended_by",
-                    "users.name as name",
-                    "employee_identification_number as nik"
-                )
-                .join('users', 'users.id', '=', 'recommended_locations.recommended_by')
-                .where('recommended_by', req.query.recommended_by);
-
-            const data = rawData.map(item => {
-                const {
-                    header_id,
-                    ...rest
-                } = item;
-
-                return {
-                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
-                    ...rest
+        await db.transaction(async trx => {
+            try {
+                const insertData = {
+                    longitude: longitude,
+                    latitude: latitude,
+                    province: province,
+                    city: city,
+                    district: district,
+                    sub_district: sub_district,
+                    postal_code: postal_code,
+                    address: address,
+                    keterangan: keterangan || null,
+                    recommend_by: decodeUserId,
+                    branch_code: req.user.branch_code,
+                    created_at: db.fn.now(),
+                    created_by: decodeUserId,
+                    updated_at: db.fn.now()
                 };
-            });
 
-            res.status(200).json({
-                status: 'Success',
-                status_code: '200',
-                message: 'Get Data Survey Sucessfully',
-                data: data
-            });
+                await trx('recommended_locations').insert(insertData);
 
-        } catch (error) {
-            next(new CustomError(
-                'Failed to Get Data Survey Location',
-                error.statusCode || 500,
-                'Error',
-                error.message
-            ));
-        }
+                await trx.commit();
+
+                res.status(200).json({
+                    status: 'Success',
+                    status_code: '200',
+                    message: 'Insert Data Recommended Locations Successfully',
+                });
+
+            } catch (error) {
+                await trx.rollback();
+
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.headers || {}),
+                    'Database Transaction Error',
+                    400,
+                    'Error',
+                    error.message || 'Failed to save recommended location, please try again.'
+                ));
+            }
+
+        });
     }
 
     static async insertRecommendedImages(req, res, next) {

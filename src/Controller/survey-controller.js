@@ -4,13 +4,16 @@ import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
 import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
+
 const db = knex(knexConfig[process.env.NODE_ENV]);
+const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
+const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
+const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
 
 export class SurveyController {
     static async getDataSurvey(req, res, next) {
         const branchCode = req.user.branch_code;
-        const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
-        const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
 
         try {
             let implementedById = parseInt(NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY));
@@ -19,12 +22,12 @@ export class SurveyController {
                 .select(
                     'survey_headers.id as header_id',
                     db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    db.raw("DATE_FORMAT(survey_headers.check_in, '%d-%m-%Y %H:%i') AS check_in"),
-                    db.raw("DATE_FORMAT(survey_headers.check_out, '%d-%m-%Y %H:%i') AS check_out"),
+                    'survey_headers.check_in',
+                    'survey_headers.check_out',
                     'users.name',
                     'users.employee_identification_number as nik',
                     'users.branch_code',
-                    db.raw("DATE_FORMAT(survey_headers.implementation_date, '%e %M %Y') AS survey_date"),
+                    'survey_headers.implementation_date',
                     db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
                     db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
                     'master_identities.full_name as member_fullname',
@@ -96,10 +99,6 @@ export class SurveyController {
     static async getDataDetailSurveyLocation(req, res, next) {
         const surveyIds = req.query.survey_ids;
 
-        const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
-        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
-        const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
-
         try {
             const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
             let IdSurvey = parseInt(surveyId);
@@ -132,7 +131,7 @@ export class SurveyController {
                     answer_input_type: question.answer_input_type,
                 };
 
-                if (question.answer_input_type === 'Select') {
+                if (question.answer_input_type.toUpperCase() === 'SELECT') {
                     const options = rawOptions
                         .filter(option => option.question_id === question.question_id)
                         .map(option => ({
@@ -155,7 +154,6 @@ export class SurveyController {
                 data: questionsWithNestedOptions
             });
 
-
         } catch (error) {
             return next(new CustomError(
                 req.originalUrl,
@@ -169,20 +167,173 @@ export class SurveyController {
     }
 
     static async insertDataSurveyLocation(req, res, next) {
-        const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
-        const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
-        const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
+        const userId = NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY);
+        const { data, check_in, check_out, is_prospect, survey_header_ids } = req.body;
 
-        const { data } = req.body;
-        const userId = req.user.id;
-
-        try {
-            data.forEach(element => {
-
-            });
-        } catch (error) {
-
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.headers || {}),
+                'Validation Error',
+                400,
+                'Bad Request',
+                'Request body must contain a non-empty "data" array.'
+            ));
         }
+
+        const survey_header_id_decoded = NodeHashIds.decode(survey_header_ids, LOCATION_SECRET_KEY);
+        const decodedSurveyHeaderId = parseInt(survey_header_id_decoded);
+
+        await db.transaction(async trx => {
+            try {
+                const headerUpdateData = {
+                    check_in: check_in || db.fn.now(),
+                    check_out: check_out || db.fn.now(),
+                    is_prospect: is_prospect,
+                    is_visited: 1,
+                    updated_by: userId,
+                    updated_at: db.fn.now()
+                };
+
+                await trx('survey_headers')
+                    .where('id', decodedSurveyHeaderId)
+                    .update(headerUpdateData);
+
+                for (const element of data) {
+                    const question_id_decoded = NodeHashIds.decode(element.question_ids, QUESTION_SECRET_KEY);
+                    const decodedQuestionId = parseInt(question_id_decoded);
+
+                    let answer_id_to_insert = null;
+                    let answer_text_to_insert = element.answer_text || null;
+
+                    if (element.option_ids) {
+                        const option_id_decoded = NodeHashIds.decode(element.option_ids, OPTION_SECRET_KEY);
+                        answer_id_to_insert = parseInt(option_id_decoded);
+                    } else {
+                        answer_id_to_insert = null;
+                        answer_text_to_insert = element.answer_text;
+                    }
+
+                    const existingAnswer = await trx('survey_details')
+                        .where('survey_header_id', decodedSurveyHeaderId)
+                        .andWhere('question_id', decodedQuestionId)
+                        .first();
+
+                    await trx('survey_details')
+                        .where('id', existingAnswer.id)
+                        .update({
+                            answer_id: answer_id_to_insert,
+                            answer_text: answer_text_to_insert,
+                            updated_by: userId,
+                            updated_at: db.fn.now()
+                        });
+                }
+
+                await trx.commit();
+
+                res.status(200).json({
+                    status: 'success',
+                    status_code: 200,
+                    message: 'Survey data has been successfully saved.'
+                });
+
+            } catch (error) {
+                await trx.rollback();
+                next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.headers || {}),
+                    'Database Transaction Error',
+                    400,
+                    'Error',
+                    error.message || 'Failed to save data, please try again.'
+                ));
+            }
+        });
+    }
+
+    static async insertDataRecommendation(req, res, next) {
+        const userId = NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY);
+        const { data, check_in, check_out, is_prospect, survey_header_ids } = req.body;
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.headers || {}),
+                'Validation Error',
+                400,
+                'Bad Request',
+                'Request body must contain a non-empty "data" array.'
+            ));
+        }
+
+        const survey_header_id_decoded = NodeHashIds.decode(survey_header_ids, LOCATION_SECRET_KEY);
+        const decodedSurveyHeaderId = parseInt(survey_header_id_decoded);
+
+        await db.transaction(async trx => {
+            try {
+                const headerUpdateData = {
+                    check_in: check_in || db.fn.now(),
+                    check_out: check_out || db.fn.now(),
+                    is_prospect: is_prospect,
+                    is_visited: 1,
+                    updated_by: userId,
+                    updated_at: db.fn.now()
+                };
+
+                await trx('survey_headers')
+                    .where('id', decodedSurveyHeaderId)
+                    .update(headerUpdateData);
+
+                for (const element of data) {
+                    const question_id_decoded = NodeHashIds.decode(element.question_ids, QUESTION_SECRET_KEY);
+                    const decodedQuestionId = parseInt(question_id_decoded);
+
+                    let answer_id_to_insert = null;
+                    let answer_text_to_insert = element.answer_text || null;
+
+                    if (element.option_ids) {
+                        const option_id_decoded = NodeHashIds.decode(element.option_ids, OPTION_SECRET_KEY);
+                        answer_id_to_insert = parseInt(option_id_decoded);
+                    } else {
+                        answer_id_to_insert = null;
+                        answer_text_to_insert = element.answer_text;
+                    }
+
+                    const existingAnswer = await trx('survey_details')
+                        .where('survey_header_id', decodedSurveyHeaderId)
+                        .andWhere('question_id', decodedQuestionId)
+                        .first();
+
+                    await trx('survey_details')
+                        .where('id', existingAnswer.id)
+                        .update({
+                            answer_id: answer_id_to_insert,
+                            answer_text: answer_text_to_insert,
+                            updated_by: userId,
+                            updated_at: db.fn.now()
+                        });
+                }
+
+                await trx.commit();
+
+                res.status(200).json({
+                    status: 'success',
+                    status_code: 200,
+                    message: 'Survey data has been successfully saved.'
+                });
+
+            } catch (error) {
+                await trx.rollback();
+                next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.headers || {}),
+                    'Database Transaction Error',
+                    400,
+                    'Error',
+                    error.message || 'Failed to save data, please try again.'
+                ));
+            }
+        });
     }
 }
 
