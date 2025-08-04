@@ -32,8 +32,7 @@ export class RecommendationController {
                     'keterangan'
                 )
                 .join('users', 'users.id', '=', 'recommended_locations.recommend_by')
-                .where('recommend_by', RecommendedById)
-                .andWhere('recommended_locations.branch_code', req.user.branch_code);
+                .where('recommended_locations.branch_code', req.user.branch_code);
 
             const recommendedLocationIds = rawLocations.map(loc => loc.id);
 
@@ -126,7 +125,7 @@ export class RecommendationController {
                 await trx('recommended_locations').insert(insertData);
 
                 const [recommendedId] = await trx('recommended_locations').insert(insertData, ['id']);
-                console.log(recommendedId);
+
                 const encodedRecommendedId = NodeHashIds.encode(recommendedId, RECOMMENDED_LOCATION_SECRET_KEY);
 
                 await trx.commit();
@@ -135,7 +134,7 @@ export class RecommendationController {
                     status: 'Success',
                     status_code: '200',
                     message: 'Insert Data Recommended Locations Successfully',
-                    recommended: encodedRecommendedId
+                    recommended_ids: encodedRecommendedId
                 });
 
             } catch (error) {

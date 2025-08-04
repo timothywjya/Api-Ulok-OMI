@@ -17,6 +17,8 @@ const __dirname = path.dirname(__filename);
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
 const SURVEY_LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
+const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
+
 
 export class ImageController {
     static async uploadImages(req, res, next) {
@@ -119,4 +121,50 @@ export class ImageController {
             }
         });
     }
+
+
 }
+
+export class PublicImageController {
+    static async getPublicDataImages(req, res, next) {
+        try {
+            const BASE_URL = 'https://127.0.0.1/images/';
+
+            const allImages = await db('images').select('*');
+
+            const encodedImagesWithUrl = allImages.map(image => {
+                const encodedId = NodeHashIds.encode(image.id, IMAGE_SECRET_KEY);
+
+                let photoUrl;
+                if (image.survey_id === null && image.recommended_id !== null) {
+                    photoUrl = `${BASE_URL}recommended_location/${image.photo}`;
+                } else {
+                    photoUrl = `${BASE_URL}survey/${image.photo}`;
+                }
+
+                return {
+                    image_ids: encodedId,
+                    url: photoUrl
+                };
+            });
+
+            res.status(200).json({
+                status: 'Success',
+                status_code: '200',
+                message: 'Data survey lokasi berhasil diambil.',
+                data: encodedImagesWithUrl
+            });
+        } catch (error) {
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.headers || {}),
+                'Database Error',
+                500,
+                'Internal Server Error',
+                error.message || 'Gagal mengambil data survey lokasi.'
+            ));
+        }
+    }
+}
+
+export default { ImageController, PublicImageController };

@@ -27,6 +27,15 @@ const errorHandler = async(err, req, res, next) => {
     const clientMessage = isCustomError && typeof err.message === 'string' ? err.message : 'Terjadi kesalahan pada server.';
     const errorMessage = isCustomError && typeof err.error === 'string' ? err.error : (err.message || 'Unknown server error.');
 
+    let logCreatedBy = '0';
+    if (req.user && req.user.userIds) {
+        try {
+            logCreatedBy = NodeHashIds.decode(req.user.userIds, process.env.USER_SECRET_KEY);
+        } catch (decodeError) {
+            logCreatedBy = '1';
+        }
+    }
+
     const logData = {
         log_url: req.originalUrl ? req.originalUrl : (req.body && req.body.url ? req.body.url : 'Unknown URL'),
         log_status_code: statusCode,
@@ -35,7 +44,7 @@ const errorHandler = async(err, req, res, next) => {
         log_message: clientMessage,
         log_error_message: errorMessage,
         log_created_at: db.fn.now(),
-        log_created_by: NodeHashIds.decode(req.user.userIds, process.env.USER_SECRET_KEY) || '1'
+        log_created_by: logCreatedBy
     };
 
     try {
