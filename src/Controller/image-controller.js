@@ -156,7 +156,7 @@ export class PublicImageController {
 
             if (recommended_ids) {
                 const decodedId = NodeHashIds.decode(recommended_ids, process.env.RECOMMENDED_LOCATION_SECRET_KEY);
-                query = query.where('recommended_id', decodedId);
+                query = query.where('recommend_id', decodedId);
             } else if (survey_ids) {
                 const decodedId = NodeHashIds.decode(survey_ids, process.env.SURVEY_LOCATION_SECRET_KEY);
                 query = query.where('survey_id', decodedId);

@@ -23,7 +23,13 @@ export class RecommendationController {
                     'employee_identification_number as recommend_nik',
                     'longitude',
                     'latitude',
-                    'keterangan'
+                    'province',
+                    'city',
+                    'district',
+                    'sub_district',
+                    'postal_code',
+                    'address',
+                    'keterangan',
                 )
                 .join('users', 'users.id', '=', 'recommended_locations.recommend_by')
                 .where('recommended_locations.branch_code', req.user.branch_code);

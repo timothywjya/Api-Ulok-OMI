@@ -1,5 +1,3 @@
-// src/Utils/HashIds.js
-
 import Hashids from 'hashids';
 import dotenv from 'dotenv';
 
