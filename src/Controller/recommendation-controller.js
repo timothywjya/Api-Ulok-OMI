@@ -9,10 +9,10 @@ const db = knex(knexConfig[process.env.NODE_ENV]);
 const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
 const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
+const BASE_URL = process.env.URL_IMAGE_PUBLIC;
 
 export class RecommendationController {
     static async getDataListRecommendedLocation(req, res, next) {
-        const recommendedBy = req.user.userIds;
 
         try {
             const rawLocations = await db('recommended_locations')
@@ -44,7 +44,7 @@ export class RecommendationController {
                     .filter(image => image.recommend_id === location.id)
                     .map(image => ({
                         ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
-                        photo_url: image.photo_url,
+                        photo_url: `${BASE_URL}images/recommended_location/${image.photo_url}`,
                     }));
 
                 const {
