@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validateImageKey } from '../Application/Middleware/ImageMiddleware.js';
 import { PublicImageController } from '../Controller/image-controller.js';
 
 const router = Router();
@@ -11,6 +12,6 @@ router.get('/', (req, res) => {
     });
 });
 
-router.get('/get-data-public-image', PublicImageController.getPublicDataImages);
+router.get('/get-data-public-image', validateImageKey, PublicImageController.getPublicDataImages);
 
 export default router;

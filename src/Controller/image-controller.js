@@ -19,7 +19,6 @@ const SURVEY_LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
 const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
 
-
 export class ImageController {
     static async uploadImages(req, res, next) {
         let parentId;
@@ -121,22 +120,55 @@ export class ImageController {
             }
         });
     }
-
-
 }
 
 export class PublicImageController {
     static async getPublicDataImages(req, res, next) {
+        const BASE_URL = process.env.URL_IMAGE_PUBLIC;
         try {
-            const BASE_URL = 'https://127.0.0.1/images/';
 
-            const allImages = await db('images').select('*');
+            const survey_ids = req.query.survey_ids;
+            const recommended_ids = req.query.recommended_ids;
+
+            if (!survey_ids && !recommended_ids) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.headers || {}),
+                    'Validation Error',
+                    400,
+                    'Bad Request',
+                    'Anda harus mengisi salah satu dari recommended_ids atau survey_ids.'
+                ));
+            }
+
+            if (survey_ids && recommended_ids) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify(req.headers || {}),
+                    'Validation Error',
+                    400,
+                    'Bad Request',
+                    'Hanya salah satu dari recommended_ids atau survey_ids yang boleh diisi.'
+                ));
+            }
+
+            let query = db('images').select('*');
+
+            if (recommended_ids) {
+                const decodedId = NodeHashIds.decode(recommended_ids, process.env.RECOMMENDED_LOCATION_SECRET_KEY);
+                query = query.where('recommended_id', decodedId);
+            } else if (survey_ids) {
+                const decodedId = NodeHashIds.decode(survey_ids, process.env.SURVEY_LOCATION_SECRET_KEY);
+                query = query.where('survey_id', decodedId);
+            }
+
+            const allImages = await query;
 
             const encodedImagesWithUrl = allImages.map(image => {
                 const encodedId = NodeHashIds.encode(image.id, IMAGE_SECRET_KEY);
-
                 let photoUrl;
-                if (image.survey_id === null && image.recommended_id !== null) {
+
+                if (image.recommended_id) {
                     photoUrl = `${BASE_URL}recommended_location/${image.photo}`;
                 } else {
                     photoUrl = `${BASE_URL}survey/${image.photo}`;
@@ -151,7 +183,7 @@ export class PublicImageController {
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',
-                message: 'Data survey lokasi berhasil diambil.',
+                message: 'Get Image Public Survey',
                 data: encodedImagesWithUrl
             });
         } catch (error) {

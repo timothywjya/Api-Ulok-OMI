@@ -177,7 +177,7 @@ export class UserController {
             };
 
             const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-
+            // Expired_at
             return res.status(200).json({
                 status_code: 200,
                 status: 'success',

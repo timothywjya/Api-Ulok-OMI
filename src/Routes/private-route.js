@@ -13,13 +13,10 @@ router.post('/omiho-user-data', UserController.getLoggedInUser);
 router.use(authenticateToken);
 
 router.get('/get-data-survey', SurveyController.getDataSurvey);
-router.get('/get-data-detail-survey', SurveyController.getDataDetailSurveyLocation);
+router.get('/get-data-history-survey', SurveyController.getDataHistorySurvey);
 router.get('/get-data-recommendation-location', RecommendationController.getDataListRecommendedLocation);
 router.post('/insert-data-survey', SurveyController.insertDataSurveyLocation);
 router.post('/insert-data-recommendation', RecommendationController.insertRecommendedLocation);
 router.post('/insert-image-survey', ImageController.uploadImages);
-// router.post('/insert-image-survey', RecommendationController.getDataListRecommendedLocation);
-
-// router.post('/insert-image-recommendation', SurveyController.insertDataSurveyLocation);
 
 export default router;

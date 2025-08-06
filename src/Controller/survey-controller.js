@@ -10,6 +10,8 @@ const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
 const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
 const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
+const BASE_URL = process.env.URL_IMAGE_PUBLIC;
+const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
 
 export class SurveyController {
     static async getDataSurvey(req, res, next) {
@@ -22,8 +24,8 @@ export class SurveyController {
                 .select(
                     'survey_headers.id as header_id',
                     db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    'survey_headers.check_in',
-                    'survey_headers.check_out',
+                    db.raw("DATE_FORMAT(survey_headers.check_in, '%Y-%m-%d') AS check_in"),
+                    db.raw("DATE_FORMAT(survey_headers.check_out, '%Y-%m-%d') AS check_out"),
                     'users.name',
                     'users.employee_identification_number as nik',
                     'users.branch_code',
@@ -56,10 +58,44 @@ export class SurveyController {
                 .join('master_identities', 'store_locations.identity_id', '=', 'master_identities.id')
                 .where('survey_headers.implemented_by', implementedById)
                 .andWhere('survey_headers.branch_code', branchCode)
-                .andWhereRaw('survey_headers.implementation_date >= NOW()')
+                .andWhereRaw('survey_headers.implementation_date = NOW()')
+                .whereNull('survey_headers.check_in')
+                .whereNull('survey_headers.check_out')
                 .andWhere('survey_headers.is_visited', 0)
                 .whereNull('survey_headers.deleted_at')
                 .whereNull('survey_headers.deleted_by');
+
+            const headerIds = rawData.map(item => item.header_id);
+
+            if (headerIds.length === 0) {
+                return res.status(200).json({
+                    status: 'Success',
+                    status_code: '200',
+                    message: 'No survey data found for today',
+                    data: []
+                });
+            }
+
+            const rawQuestions = await db('survey_details')
+                .select(
+                    'survey_details.survey_header_id',
+                    'master_questions.id as question_id',
+                    'master_questions.question_text as question',
+                    'master_questions.answer_input_type'
+                )
+                .join("master_questions", "master_questions.id", '=', "survey_details.question_id")
+                .whereIn('survey_details.survey_header_id', headerIds);
+
+            const questionIds = rawQuestions.map(q => q.question_id);
+            const rawOptions = await db('master_options')
+                .select(
+                    'id',
+                    'question_id',
+                    'option_group',
+                    'option_code',
+                    'option_label'
+                )
+                .whereIn("question_id", questionIds);
 
             const data = rawData.map(item => {
                 const {
@@ -69,11 +105,37 @@ export class SurveyController {
                     ...rest
                 } = item;
 
+                const questions = rawQuestions
+                    .filter(q => q.survey_header_id === header_id)
+                    .map(question => {
+                        const questionObject = {
+                            question_ids: NodeHashIds.encode(question.question_id, QUESTION_SECRET_KEY),
+                            question: question.question,
+                            answer_input_type: question.answer_input_type,
+                        };
+
+                        if (question.answer_input_type.toUpperCase() === 'SELECT') {
+                            const options = rawOptions
+                                .filter(option => option.question_id === question.question_id)
+                                .map(option => ({
+                                    option_ids: NodeHashIds.encode(option.id, OPTION_SECRET_KEY),
+                                    option_group: option.option_group,
+                                    option_code: option.option_code,
+                                    option_label: option.option_label,
+                                }));
+
+                            questionObject.options = options;
+                        }
+
+                        return questionObject;
+                    });
+
                 return {
                     ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
                     ...rest,
                     visit_status: Boolean(visit_status),
-                    prospect_status: prospect_status === 1 ? true : (prospect_status === 0 ? false : null)
+                    prospect_status: prospect_status === 1 ? true : (prospect_status === 0 ? false : null),
+                    questions: questions
                 };
             });
 
@@ -92,76 +154,6 @@ export class SurveyController {
                 500,
                 'Error',
                 error.message || 'An unexpected error occurred'
-            ));
-        }
-    }
-
-    static async getDataDetailSurveyLocation(req, res, next) {
-        const surveyIds = req.query.survey_ids;
-
-        try {
-            const surveyId = NodeHashIds.decode(surveyIds, LOCATION_SECRET_KEY);
-            let IdSurvey = parseInt(surveyId);
-
-            const rawQuestions = await db('survey_details')
-                .select(
-                    'question_id',
-                    'question_text as question',
-                    'answer_input_type'
-                )
-                .join("master_questions", "master_questions.id", '=', "question_id")
-                .where("survey_header_id", IdSurvey);
-
-            const questionIds = rawQuestions.map(q => q.question_id);
-
-            const rawOptions = await db('master_options')
-                .select(
-                    'id',
-                    'question_id',
-                    'option_group',
-                    'option_code',
-                    'option_label'
-                )
-                .whereIn("question_id", questionIds);
-
-            const questionsWithNestedOptions = rawQuestions.map(question => {
-                const questionObject = {
-                    question_ids: NodeHashIds.encode(question.question_id, QUESTION_SECRET_KEY),
-                    question: question.question,
-                    answer_input_type: question.answer_input_type,
-                };
-
-                if (question.answer_input_type.toUpperCase() === 'SELECT') {
-                    const options = rawOptions
-                        .filter(option => option.question_id === question.question_id)
-                        .map(option => ({
-                            option_ids: NodeHashIds.encode(option.id, OPTION_SECRET_KEY),
-                            option_group: option.option_group,
-                            option_code: option.option_code,
-                            option_label: option.option_label,
-                        }));
-
-                    questionObject.options = options;
-                }
-
-                return questionObject;
-            });
-
-            res.status(200).json({
-                status: 'Success',
-                status_code: '200',
-                message: 'Get Data Question and Options Survey Location Sucessfully',
-                data: questionsWithNestedOptions
-            });
-
-        } catch (error) {
-            return next(new CustomError(
-                req.originalUrl,
-                JSON.stringify(req.body || {}),
-                'Failed to Get Data Question and Options Survey Location',
-                500,
-                'Error',
-                error.message || 'Unknown error in getLoggedInUser'
             ));
         }
     }
@@ -249,6 +241,147 @@ export class SurveyController {
                 ));
             }
         });
+    }
+
+    static async getDataHistorySurvey(req, res, next) {
+        const branchCode = req.user.branch_code;
+
+        try {
+            let implementedById = parseInt(NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY));
+
+            const rawData = await db('survey_headers')
+                .select(
+                    'survey_headers.id as header_id',
+                    db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
+                    db.raw("DATE_FORMAT(survey_headers.check_in, '%Y-%m-%d') AS check_in"),
+                    db.raw("DATE_FORMAT(survey_headers.check_out, '%Y-%m-%d') AS check_out"),
+                    'survey_headers.deleted_at',
+                    'users.name',
+                    'users.employee_identification_number as nik',
+                    'users.branch_code',
+                    db.raw("DATE_FORMAT(implementation_date, '%Y-%m-%d') AS implementation_date"),
+                    db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
+                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
+                    'master_identities.full_name as member_fullname',
+                    'master_identities.phone_number as member_phone',
+                    'store_locations.province as member_province',
+                    'store_locations.city as member_city',
+                    'store_locations.district as member_district',
+                    'store_locations.sub_district as member_sub_district',
+                    'store_locations.address as member_address',
+                    'store_locations.postal_code as member_postal_code',
+                    'store_locations.customer_type as member_customer_type',
+                    'store_locations.survey_information_source as member_survey_information_source',
+                    'store_locations.ownership_status as member_ownership_status',
+                    'store_locations.site_type as member_site_type',
+                    'store_locations.length as member_length',
+                    'store_locations.width as member_width',
+                    'store_locations.total_floors as member_total_floors',
+                    'store_locations.longitude as member_longitude',
+                    'store_locations.latitude as member_latitude',
+                    'store_locations.personnel_status as member_personnel_status',
+                    'store_locations.notes as member_notes'
+                )
+                .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
+                .join('users', 'users.id', '=', 'survey_headers.implemented_by')
+                .join('store_locations', 'store_locations.id', '=', 'survey_headers.store_location_id')
+                .join('master_identities', 'store_locations.identity_id', '=', 'master_identities.id')
+                .where('survey_headers.implemented_by', implementedById)
+                .andWhere('survey_headers.branch_code', branchCode)
+                .andWhere('survey_headers.implementation_date', '>', db.raw('DATE_SUB(NOW(), INTERVAL 1 MONTH)'))
+                .andWhere('survey_headers.is_visited', 1)
+                .whereNotNull('survey_headers.check_in')
+                .whereNotNull('survey_headers.check_out')
+                .orderBy('survey_headers.implementation_date', 'desc');
+
+            const headerIds = rawData.map(item => item.header_id);
+
+            if (headerIds.length === 0) {
+                return res.status(200).json({
+                    status: 'Success',
+                    status_code: '200',
+                    message: 'No survey history data found for the last month.',
+                    data: []
+                });
+            }
+
+            const rawAnswers = await db('survey_details')
+                .select(
+                    'survey_details.survey_header_id',
+                    'master_questions.id as question_id',
+                    'master_questions.question_text as question',
+                    'master_questions.answer_input_type',
+                    'survey_details.answer_text',
+                    'survey_details.answer_id',
+                    'master_options.option_label'
+                )
+                .join("master_questions", "master_questions.id", '=', "survey_details.question_id")
+                .leftJoin('master_options', 'master_options.id', '=', 'survey_details.answer_id')
+                .whereIn('survey_details.survey_header_id', headerIds);
+
+            const allImages = await db('images')
+                .select('id', 'photo', 'survey_id')
+                .whereIn('survey_id', headerIds);
+
+            const groupedImages = allImages.reduce((acc, image) => {
+                const surveyHeaderId = image.survey_id;
+                if (!acc[surveyHeaderId]) {
+                    acc[surveyHeaderId] = [];
+                }
+                const imageUrl = `${BASE_URL}${image.photo}`;
+                acc[surveyHeaderId].push({
+                    image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
+                    url: imageUrl
+                });
+                return acc;
+            }, {});
+
+            const data = rawData.map(item => {
+                const {
+                    header_id,
+                    visit_status,
+                    prospect_status,
+                    ...rest
+                } = item;
+
+                const answers = rawAnswers
+                    .filter(a => a.survey_header_id === header_id)
+                    .map(answer => {
+                        return {
+                            question_ids: NodeHashIds.encode(answer.question_id, QUESTION_SECRET_KEY),
+                            question: answer.question,
+                            answer_input_type: answer.answer_input_type,
+                            answer: answer.answer_text || answer.option_label || null
+                        };
+                    });
+
+                return {
+                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
+                    ...rest,
+                    visit_status: Boolean(visit_status),
+                    prospect_status: prospect_status === 1 ? true : (prospect_status === 0 ? false : null),
+                    images: groupedImages[header_id] || [],
+                    answers: answers
+                };
+            });
+
+            res.status(200).json({
+                status: 'Success',
+                status_code: '200',
+                message: 'Get History Survey Location Successfully',
+                data: data
+            });
+
+        } catch (error) {
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.body || {}),
+                'Failed to Get Data Survey',
+                500,
+                'Error',
+                error.message || 'An unexpected error occurred'
+            ));
+        }
     }
 }
 

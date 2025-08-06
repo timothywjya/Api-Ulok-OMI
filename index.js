@@ -5,6 +5,8 @@ import fileUpload from 'express-fileupload';
 import helmet from 'helmet';
 import knex from 'knex';
 import morgan from 'morgan';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import winston from 'winston';
 import knexConfig from './knexfile.js';
 
@@ -16,9 +18,14 @@ import errorHandler from './src/Error/error-handling.js';
 
 dotenv.config();
 
+const __filename = fileURLToPath(
+    import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// Logger
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
@@ -65,6 +72,8 @@ app.use(morgan('combined', { stream: { write: message => logger.info(message.tri
 app.use('/', publicRoutes);
 
 app.use('/api', privateRoutes);
+
+app.use('/public', express.static(path.join(__dirname, 'images')));
 
 app.use('*', (req, res, next) => {
     req.logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
