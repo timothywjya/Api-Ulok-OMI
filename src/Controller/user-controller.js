@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
+import { ROLE_ID_MAP } from '../Helper/constanta.js';
 import NodeHashIds from '../Utils/Hashids.js';
 
 const db = knex(knexConfig[process.env.NODE_ENV || 'development']);
@@ -86,17 +87,16 @@ export class UserController {
                 ));
             }
 
-            // if (userInfo == "b51fac8f3a") { // Checking by Constanta
-            //     // Setting selain SPV dan Clerk dilarang masuk
-            //     return next(new CustomError(
-            //         req.originalUrl,
-            //         JSON.stringify(req.body || {}),
-            //         'Internal Server Error',
-            //         500,
-            //         'Oops Something Wrong',
-            //         error.message || 'Unknown error in getLoggedInUser'
-            //     ));
-            // }
+            if (getRole.oauth_role_id === ROLE_ID_MAP['BDHO']) {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify({ role_id: userInfo.role_id }),
+                    'Forbidden',
+                    403,
+                    'Access Denied',
+                    'BDHO users are not permitted to log in.'
+                ));
+            }
 
             const existingUser = await db('users')
                 .where('sso_id', userInfo.id)
@@ -177,13 +177,32 @@ export class UserController {
             };
 
             const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-            // Expired_at
+
+            let expiresInSeconds;
+
+            if (JWT_EXPIRES_IN.endsWith('d')) {
+                const days = parseInt(JWT_EXPIRES_IN.slice(0, -1));
+                expiresInSeconds = days * 24 * 60 * 60;
+            } else if (JWT_EXPIRES_IN.endsWith('h')) {
+                const hours = parseInt(JWT_EXPIRES_IN.slice(0, -1));
+                expiresInSeconds = hours * 60 * 60;
+            } else if (JWT_EXPIRES_IN.endsWith('m')) {
+                const minutes = parseInt(JWT_EXPIRES_IN.slice(0, -1));
+                expiresInSeconds = minutes * 60;
+            } else {
+                expiresInSeconds = 60 * 60;
+            }
+
+            const nowInSeconds = Math.floor(Date.now() / 1000);
+            const expirationTimestamp = nowInSeconds + expiresInSeconds;
+
             return res.status(200).json({
                 status_code: 200,
                 status: 'success',
                 message: 'Get Data User Successfully',
                 data: formattedUserData,
-                token: token
+                token: token,
+                expired_at: expirationTimestamp,
             });
 
         } catch (error) {

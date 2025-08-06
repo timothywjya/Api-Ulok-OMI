@@ -69,9 +69,32 @@ app.use((req, res, next) => {
 
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
-app.use('/', publicRoutes);
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 'error',
+        statusCode: 429,
+        message: 'Terlalu banyak permintaan dari IP ini, coba lagi setelah 15 menit.',
+    }
+});
 
-app.use('/api', privateRoutes);
+const publicLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 'error',
+        statusCode: 429,
+        message: 'Terlalu banyak permintaan untuk rute ini, coba lagi setelah 5 menit.',
+    }
+});
+
+app.use('/api', apiLimiter, privateRoutes);
+app.use('/', publicLimiter, publicRoutes);
 
 app.use('/public', express.static(path.join(__dirname, 'images')));
 
