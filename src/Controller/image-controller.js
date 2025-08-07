@@ -73,8 +73,8 @@ export class ImageController {
         await db.transaction(async trx => {
             try {
                 for (const photo of photos) {
-                    if (photo.mimetype !== 'image/png') {
-                        throw new Error(`File ${photo.name} is not a PNG. Only PNG files are allowed.`);
+                    if (photo.mimetype !== 'image/png' && photo.mimetype !== 'image/jpeg') {
+                        throw new Error(`File ${photo.name} is not a PNG/JPEG. Only PNG/JPEG files are allowed.`);
                     }
 
                     const timestamp = Date.now();

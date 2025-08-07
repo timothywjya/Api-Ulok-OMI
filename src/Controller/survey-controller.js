@@ -160,7 +160,7 @@ export class SurveyController {
 
     static async insertDataSurveyLocation(req, res, next) {
         const userId = NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY);
-        const { check_in, check_out, is_prospect, survey_header_ids, answer } = req.body.data;
+        const { check_in, check_out, is_prospect, survey_header_ids, answer } = req.body;
 
         if (!answer || !Array.isArray(answer) || answer.length === 0) {
             return next(new CustomError(
