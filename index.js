@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import fileUpload from 'express-fileupload';
+import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import knex from 'knex';
 import morgan from 'morgan';
@@ -77,7 +78,7 @@ const apiLimiter = rateLimit({
     message: {
         status: 'error',
         statusCode: 429,
-        message: 'Terlalu banyak permintaan dari IP ini, coba lagi setelah 15 menit.',
+        message: 'Too much of Request, Please Try Again in 15 Minutes',
     }
 });
 
@@ -89,7 +90,7 @@ const publicLimiter = rateLimit({
     message: {
         status: 'error',
         statusCode: 429,
-        message: 'Terlalu banyak permintaan untuk rute ini, coba lagi setelah 5 menit.',
+        message: 'Too much of Request, Please Try Again in 5 Minutes',
     }
 });
 
