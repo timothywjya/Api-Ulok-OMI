@@ -30,6 +30,7 @@ export class RecommendationController {
                     'postal_code',
                     'address',
                     'keterangan',
+                    db.raw("DATE_FORMAT(recommended_locations.created_at, '%Y-%m-%d') AS recommended_date"),
                 )
                 .join('users', 'users.id', '=', 'recommended_locations.recommend_by')
                 .where('recommended_locations.branch_code', req.user.branch_code);

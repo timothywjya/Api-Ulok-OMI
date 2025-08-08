@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
+import { ROLE_ID_MAP } from '../Helper/constanta.js';
 import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
 
@@ -20,7 +21,7 @@ export class SurveyController {
         try {
             let implementedById = parseInt(NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY));
 
-            const rawData = await db('survey_headers')
+            let rawData = db('survey_headers')
                 .select(
                     'survey_headers.id as header_id',
                     db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
@@ -65,7 +66,23 @@ export class SurveyController {
                 .whereNull('survey_headers.deleted_at')
                 .whereNull('survey_headers.deleted_by');
 
-            const headerIds = rawData.map(item => item.header_id);
+            if (req.user.role_ids === ROLE_ID_MAP['Sr. Clerk']) {
+                rawData = rawData.andWhere('survey_headers.survey_type', 1);
+            } else if (req.user.role_ids === ROLE_ID_MAP['Supervisor']) {
+                rawData = rawData.andWhere('survey_headers.survey_type', 2);
+            } else {
+                return next(new CustomError(
+                    req.originalUrl,
+                    JSON.stringify({ role_id: userInfo.role_id }),
+                    'Forbidden',
+                    403,
+                    'Access Denied',
+                    'You do not have any access to Get any Surveys'
+                ));
+            }
+            const finalData = await rawData;
+
+            const headerIds = finalData.map(item => item.header_id);
 
             if (headerIds.length === 0) {
                 return res.status(200).json({
@@ -97,7 +114,7 @@ export class SurveyController {
                 )
                 .whereIn("question_id", questionIds);
 
-            const data = rawData.map(item => {
+            const data = finalData.map(item => {
                 const {
                     header_id,
                     visit_status,

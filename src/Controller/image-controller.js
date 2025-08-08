@@ -77,6 +77,12 @@ export class ImageController {
                         throw new Error(`File ${photo.name} is not a PNG/JPEG. Only PNG/JPEG files are allowed.`);
                     }
 
+                    const fileExtension = path.extname(photo.name).toLowerCase();
+
+                    if (fileExtension !== '.png' && fileExtension !== '.jpeg' && fileExtension !== '.jpg') {
+                        throw new Error(`File ${photo.name} has an invalid extension. Only .png, .jpeg, or .jpg are allowed.`);
+                    }
+
                     const timestamp = Date.now();
                     const uniqueFilename = `${NodeHashIds.encode(timestamp)}${path.extname(photo.name)}`;
                     const filePath = path.join(uploadDir, uniqueFilename);
