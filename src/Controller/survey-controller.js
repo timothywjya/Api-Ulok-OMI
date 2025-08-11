@@ -261,124 +261,105 @@ export class SurveyController {
     }
 
     static async getDataHistorySurvey(req, res, next) {
-        const branchCode = req.user.branch_code;
+        const { userIds, branch_code } = req.user;
 
         try {
-            let implementedById = parseInt(NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY));
+            const implementedById = NodeHashIds.decode(userIds, USER_SECRET_KEY);
 
-            const rawData = await db('survey_headers')
+            const allImages = await db('images')
+                .select('images.id', 'photo', 'survey_id')
+                .join('survey_headers', 'survey_headers.id', 'images.survey_id')
+                .where('survey_headers.implemented_by', implementedById)
+                .andWhere('survey_headers.branch_code', branch_code)
+                .andWhere('survey_headers.implementation_date', '>', db.raw('DATE_SUB(NOW(), INTERVAL 1 MONTH)'))
+                .andWhere('survey_headers.is_visited', 1)
+                .whereNotNull('survey_headers.check_in')
+                .whereNotNull('survey_headers.check_out')
+                .whereNull('survey_headers.deleted_at');
+
+            if (allImages.length === 0) {
+                return res.status(200).json({
+                    status: 'Success',
+                    status_code: '200',
+                    message: 'No survey history data with images found for the last month.',
+                    data: []
+                });
+            }
+
+            const headerIds = [...new Set(allImages.map(item => item.survey_id))];
+
+            const groupedImages = allImages.reduce((acc, image) => {
+                if (!acc[image.survey_id]) acc[image.survey_id] = [];
+                acc[image.survey_id].push({
+                    image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
+                    url: `${BASE_URL}${image.photo}`
+                });
+                return acc;
+            }, {});
+
+            const [rawData, rawAnswers] = await Promise.all([
+                db('survey_headers')
                 .select(
                     'survey_headers.id as header_id',
                     db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
                     db.raw("DATE_FORMAT(survey_headers.check_in, '%Y-%m-%d') AS check_in"),
                     db.raw("DATE_FORMAT(survey_headers.check_out, '%Y-%m-%d') AS check_out"),
-                    'survey_headers.deleted_at',
-                    'users.name',
-                    'users.employee_identification_number as nik',
-                    'users.branch_code',
                     db.raw("DATE_FORMAT(implementation_date, '%Y-%m-%d') AS implementation_date"),
                     db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
                     db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
-                    'master_identities.full_name as member_fullname',
-                    'master_identities.phone_number as member_phone',
-                    'store_locations.province as member_province',
-                    'store_locations.city as member_city',
-                    'store_locations.district as member_district',
-                    'store_locations.sub_district as member_sub_district',
-                    'store_locations.address as member_address',
-                    'store_locations.postal_code as member_postal_code',
-                    'store_locations.customer_type as member_customer_type',
-                    'store_locations.survey_information_source as member_survey_information_source',
-                    'store_locations.ownership_status as member_ownership_status',
-                    'store_locations.site_type as member_site_type',
-                    'store_locations.length as member_length',
-                    'store_locations.width as member_width',
-                    'store_locations.total_floors as member_total_floors',
-                    'store_locations.longitude as member_longitude',
-                    'store_locations.latitude as member_latitude',
-                    'store_locations.personnel_status as member_personnel_status',
+                    'users.name', 'users.employee_identification_number as nik', 'users.branch_code',
+                    'master_identities.full_name as member_fullname', 'master_identities.phone_number as member_phone',
+                    'store_locations.province as member_province', 'store_locations.city as member_city',
+                    'store_locations.district as member_district', 'store_locations.sub_district as member_sub_district',
+                    'store_locations.address as member_address', 'store_locations.postal_code as member_postal_code',
+                    'store_locations.customer_type as member_customer_type', 'store_locations.survey_information_source as member_survey_information_source',
+                    'store_locations.ownership_status as member_ownership_status', 'store_locations.site_type as member_site_type',
+                    'store_locations.length as member_length', 'store_locations.width as member_width',
+                    'store_locations.total_floors as member_total_floors', 'store_locations.longitude as member_longitude',
+                    'store_locations.latitude as member_latitude', 'store_locations.personnel_status as member_personnel_status',
                     'store_locations.notes as member_notes'
                 )
-                .join('master_survey_types', 'survey_headers.survey_type', '=', 'master_survey_types.id')
-                .join('users', 'users.id', '=', 'survey_headers.implemented_by')
-                .join('store_locations', 'store_locations.id', '=', 'survey_headers.store_location_id')
-                .join('master_identities', 'store_locations.identity_id', '=', 'master_identities.id')
-                .where('survey_headers.implemented_by', implementedById)
-                .andWhere('survey_headers.branch_code', branchCode)
-                .andWhere('survey_headers.implementation_date', '>', db.raw('DATE_SUB(NOW(), INTERVAL 1 MONTH)'))
-                .andWhere('survey_headers.is_visited', 1)
-                .whereNotNull('survey_headers.check_in')
-                .whereNotNull('survey_headers.check_out')
-                .orderBy('survey_headers.implementation_date', 'desc');
+                .join('master_survey_types', 'survey_headers.survey_type', 'master_survey_types.id')
+                .join('users', 'users.id', 'survey_headers.implemented_by')
+                .join('store_locations', 'store_locations.id', 'survey_headers.store_location_id')
+                .join('master_identities', 'master_identities.id', 'store_locations.identity_id')
+                .whereIn('survey_headers.id', headerIds)
+                .orderBy('survey_headers.implementation_date', 'desc'),
 
-            const headerIds = rawData.map(item => item.header_id);
-
-            if (headerIds.length === 0) {
-                return res.status(200).json({
-                    status: 'Success',
-                    status_code: '200',
-                    message: 'No survey history data found for the last month.',
-                    data: []
-                });
-            }
-
-            const rawAnswers = await db('survey_details')
+                db('survey_details')
                 .select(
                     'survey_details.survey_header_id',
                     'master_questions.id as question_id',
                     'master_questions.question_text as question',
                     'master_questions.answer_input_type',
                     'survey_details.answer_text',
-                    'survey_details.answer_id',
                     'master_options.option_label'
                 )
-                .join("master_questions", "master_questions.id", '=', "survey_details.question_id")
-                .leftJoin('master_options', 'master_options.id', '=', 'survey_details.answer_id')
-                .whereIn('survey_details.survey_header_id', headerIds);
+                .join("master_questions", "master_questions.id", 'survey_details.question_id')
+                .leftJoin('master_options', 'master_options.id', 'survey_details.answer_id')
+                .whereIn('survey_details.survey_header_id', headerIds)
+            ]);
 
-            const allImages = await db('images')
-                .select('id', 'photo', 'survey_id')
-                .whereIn('survey_id', headerIds);
-
-            const groupedImages = allImages.reduce((acc, image) => {
-                const surveyHeaderId = image.survey_id;
-                if (!acc[surveyHeaderId]) {
-                    acc[surveyHeaderId] = [];
-                }
-                const imageUrl = `${BASE_URL}${image.photo}`;
-                acc[surveyHeaderId].push({
-                    image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
-                    url: imageUrl
+            const groupedAnswers = rawAnswers.reduce((acc, answer) => {
+                if (!acc[answer.survey_header_id]) acc[answer.survey_header_id] = [];
+                acc[answer.survey_header_id].push({
+                    question_ids: NodeHashIds.encode(answer.question_id, QUESTION_SECRET_KEY),
+                    question: answer.question,
+                    answer_input_type: answer.answer_input_type,
+                    answer: answer.answer_text || answer.option_label || null
                 });
                 return acc;
             }, {});
 
             const data = rawData.map(item => {
-                const {
-                    header_id,
-                    visit_status,
-                    prospect_status,
-                    ...rest
-                } = item;
-
-                const answers = rawAnswers
-                    .filter(a => a.survey_header_id === header_id)
-                    .map(answer => {
-                        return {
-                            question_ids: NodeHashIds.encode(answer.question_id, QUESTION_SECRET_KEY),
-                            question: answer.question,
-                            answer_input_type: answer.answer_input_type,
-                            answer: answer.answer_text || answer.option_label || null
-                        };
-                    });
-
+                const headerId = item.header_id;
                 return {
-                    ids: NodeHashIds.encode(header_id, LOCATION_SECRET_KEY),
-                    ...rest,
-                    visit_status: Boolean(visit_status),
-                    prospect_status: prospect_status === 1 ? true : (prospect_status === 0 ? false : null),
-                    images: groupedImages[header_id] || [],
-                    answers: answers
+                    ids: NodeHashIds.encode(headerId, LOCATION_SECRET_KEY),
+                    ...item,
+                    visit_status: item.visit_status === 1,
+                    prospect_status: item.prospect_status === 1 ? true : (item.prospect_status === 0 ? false : null),
+                    images: groupedImages[headerId] || [],
+                    answers: groupedAnswers[headerId] || []
                 };
             });
 

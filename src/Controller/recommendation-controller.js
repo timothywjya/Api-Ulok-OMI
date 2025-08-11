@@ -93,17 +93,6 @@ export class RecommendationController {
 
         const { longitude, latitude, province, city, district, sub_district, postal_code, address, keterangan } = req.body;
 
-        if (!longitude || !latitude || !province || !city || !district || !sub_district || !postal_code || !address) {
-            return next(new CustomError(
-                req.originalUrl,
-                JSON.stringify(req.headers || {}),
-                'Validation Error',
-                400,
-                'Bad Request',
-                'Missing required fields in request body.'
-            ));
-        }
-
         await db.transaction(async trx => {
             try {
                 const insertData = {
@@ -122,8 +111,6 @@ export class RecommendationController {
                     created_by: decodeUserId,
                     updated_at: db.fn.now()
                 };
-
-                await trx('recommended_locations').insert(insertData);
 
                 const [recommendedId] = await trx('recommended_locations').insert(insertData, ['id']);
 
