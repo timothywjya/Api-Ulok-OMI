@@ -273,6 +273,8 @@ export class SurveyController {
                 .andWhere('survey_headers.branch_code', branch_code)
                 .andWhere('survey_headers.implementation_date', '>', db.raw('DATE_SUB(NOW(), INTERVAL 1 MONTH)'))
                 .andWhere('survey_headers.is_visited', 1)
+                .andWhere('survey_headers.branch_code', req.user.branch_code)
+                .andWhere('survey_headers.implemented_by', NodeHashIds.decode(req.user.userIds, USER_SECRET_KEY))
                 .whereNotNull('survey_headers.check_in')
                 .whereNotNull('survey_headers.check_out')
                 .whereNull('survey_headers.deleted_at');
@@ -299,45 +301,45 @@ export class SurveyController {
 
             const [rawData, rawAnswers] = await Promise.all([
                 db('survey_headers')
-                .select(
-                    'survey_headers.id as header_id',
-                    db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
-                    db.raw("DATE_FORMAT(survey_headers.check_in, '%Y-%m-%d') AS check_in"),
-                    db.raw("DATE_FORMAT(survey_headers.check_out, '%Y-%m-%d') AS check_out"),
-                    db.raw("DATE_FORMAT(implementation_date, '%Y-%m-%d') AS implementation_date"),
-                    db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
-                    db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
-                    'users.name', 'users.employee_identification_number as nik', 'users.branch_code',
-                    'master_identities.full_name as member_fullname', 'master_identities.phone_number as member_phone',
-                    'store_locations.province as member_province', 'store_locations.city as member_city',
-                    'store_locations.district as member_district', 'store_locations.sub_district as member_sub_district',
-                    'store_locations.address as member_address', 'store_locations.postal_code as member_postal_code',
-                    'store_locations.customer_type as member_customer_type', 'store_locations.survey_information_source as member_survey_information_source',
-                    'store_locations.ownership_status as member_ownership_status', 'store_locations.site_type as member_site_type',
-                    'store_locations.length as member_length', 'store_locations.width as member_width',
-                    'store_locations.total_floors as member_total_floors', 'store_locations.longitude as member_longitude',
-                    'store_locations.latitude as member_latitude', 'store_locations.personnel_status as member_personnel_status',
-                    'store_locations.notes as member_notes'
-                )
-                .join('master_survey_types', 'survey_headers.survey_type', 'master_survey_types.id')
-                .join('users', 'users.id', 'survey_headers.implemented_by')
-                .join('store_locations', 'store_locations.id', 'survey_headers.store_location_id')
-                .join('master_identities', 'master_identities.id', 'store_locations.identity_id')
-                .whereIn('survey_headers.id', headerIds)
-                .orderBy('survey_headers.implementation_date', 'desc'),
+                    .select(
+                        'survey_headers.id as header_id',
+                        db.raw("CASE master_survey_types.survey_type WHEN 'survey_monitoring' THEN 'Survey Monitoring' WHEN 'survey_lokasi' THEN 'Survey Lokasi' ELSE master_survey_types.survey_type END AS survey_type"),
+                        db.raw("DATE_FORMAT(survey_headers.check_in, '%Y-%m-%d') AS check_in"),
+                        db.raw("DATE_FORMAT(survey_headers.check_out, '%Y-%m-%d') AS check_out"),
+                        db.raw("DATE_FORMAT(implementation_date, '%Y-%m-%d') AS implementation_date"),
+                        db.raw("CASE WHEN survey_headers.is_visited = 1 THEN TRUE ELSE FALSE END AS visit_status"),
+                        db.raw("CASE WHEN survey_headers.is_prospect = 1 THEN TRUE WHEN survey_headers.is_prospect = 0 THEN FALSE ELSE NULL END AS prospect_status"),
+                        'users.name', 'users.employee_identification_number as nik', 'users.branch_code',
+                        'master_identities.full_name as member_fullname', 'master_identities.phone_number as member_phone',
+                        'store_locations.province as member_province', 'store_locations.city as member_city',
+                        'store_locations.district as member_district', 'store_locations.sub_district as member_sub_district',
+                        'store_locations.address as member_address', 'store_locations.postal_code as member_postal_code',
+                        'store_locations.customer_type as member_customer_type', 'store_locations.survey_information_source as member_survey_information_source',
+                        'store_locations.ownership_status as member_ownership_status', 'store_locations.site_type as member_site_type',
+                        'store_locations.length as member_length', 'store_locations.width as member_width',
+                        'store_locations.total_floors as member_total_floors', 'store_locations.longitude as member_longitude',
+                        'store_locations.latitude as member_latitude', 'store_locations.personnel_status as member_personnel_status',
+                        'store_locations.notes as member_notes'
+                    )
+                    .join('master_survey_types', 'survey_headers.survey_type', 'master_survey_types.id')
+                    .join('users', 'users.id', 'survey_headers.implemented_by')
+                    .join('store_locations', 'store_locations.id', 'survey_headers.store_location_id')
+                    .join('master_identities', 'master_identities.id', 'store_locations.identity_id')
+                    .whereIn('survey_headers.id', headerIds)
+                    .orderBy('survey_headers.implementation_date', 'desc'),
 
                 db('survey_details')
-                .select(
-                    'survey_details.survey_header_id',
-                    'master_questions.id as question_id',
-                    'master_questions.question_text as question',
-                    'master_questions.answer_input_type',
-                    'survey_details.answer_text',
-                    'master_options.option_label'
-                )
-                .join("master_questions", "master_questions.id", 'survey_details.question_id')
-                .leftJoin('master_options', 'master_options.id', 'survey_details.answer_id')
-                .whereIn('survey_details.survey_header_id', headerIds)
+                    .select(
+                        'survey_details.survey_header_id',
+                        'master_questions.id as question_id',
+                        'master_questions.question_text as question',
+                        'master_questions.answer_input_type',
+                        'survey_details.answer_text',
+                        'master_options.option_label'
+                    )
+                    .join("master_questions", "master_questions.id", 'survey_details.question_id')
+                    .leftJoin('master_options', 'master_options.id', 'survey_details.answer_id')
+                    .whereIn('survey_details.survey_header_id', headerIds)
             ]);
 
             const groupedAnswers = rawAnswers.reduce((acc, answer) => {
@@ -352,10 +354,11 @@ export class SurveyController {
             }, {});
 
             const data = rawData.map(item => {
-                const headerId = item.header_id;
+                const { header_id, ...rest } = item;
+                const headerId = header_id;
                 return {
                     ids: NodeHashIds.encode(headerId, LOCATION_SECRET_KEY),
-                    ...item,
+                    ...rest,
                     visit_status: item.visit_status === 1,
                     prospect_status: item.prospect_status === 1 ? true : (item.prospect_status === 0 ? false : null),
                     images: groupedImages[headerId] || [],

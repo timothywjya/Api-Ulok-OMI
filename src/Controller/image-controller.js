@@ -52,7 +52,7 @@ export class ImageController {
             parentTable = 'recommend_id';
             uploadDir = path.join(__dirname, '..', '..', 'images', 'recommended_location');
             const decodedId = NodeHashIds.decode(recommended_location_ids, RECOMMENDED_LOCATION_SECRET_KEY);
-            parentId = parseInt(decodedId[0]);
+            parentId = parseInt(decodedId);
         } else {
             return next(new CustomError(
                 req.originalUrl,
