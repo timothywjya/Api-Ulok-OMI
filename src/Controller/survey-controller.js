@@ -292,9 +292,11 @@ export class SurveyController {
 
             const groupedImages = allImages.reduce((acc, image) => {
                 if (!acc[image.survey_id]) acc[image.survey_id] = [];
+                const imageUrl = `${BASE_URL}images/survey/${image.photo}`;
+
                 acc[image.survey_id].push({
                     image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
-                    url: `${BASE_URL}${image.photo}`
+                    url: imageUrl
                 });
                 return acc;
             }, {});

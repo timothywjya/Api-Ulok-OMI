@@ -10,11 +10,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import winston from 'winston';
 import knexConfig from './knexfile.js';
+import ApiError from './src/Error/api-error.js';
 
 import privateRoutes from './src/Routes/private-route.js';
 import publicRoutes from './src/Routes/public-route.js';
 
-import ApiError from './src/Error/api-error.js';
 import errorHandler from './src/Error/error-handling.js';
 
 dotenv.config();
@@ -94,10 +94,12 @@ const publicLimiter = rateLimit({
     }
 });
 
+app.use('/images', express.static(path.join(__dirname, 'images')));
+
+console.log('Serving static files from:', path.join(__dirname, 'images'));
+
 app.use('/api', apiLimiter, privateRoutes);
 app.use('/', publicLimiter, publicRoutes);
-
-app.use('/public', express.static(path.join(__dirname, 'images')));
 
 app.use('*', (req, res, next) => {
     req.logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
