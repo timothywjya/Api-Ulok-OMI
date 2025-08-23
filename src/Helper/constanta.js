@@ -1,5 +1,5 @@
 export const ROLE_ID_MAP = {
-    'BDHO': 'b51fac8f3a',
-    'Supervisor': 'e1ea850fe8',
-    'Sr. Clerk': 'e0b4499a07',
+    'BDHO': 'ca3d5dea82',
+    'SUPERVISOR': '1b2445fbd5',
+    'SR.CLERK': 'ff2e0f8132',
 };

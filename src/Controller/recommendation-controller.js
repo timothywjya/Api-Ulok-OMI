@@ -1,3 +1,5 @@
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
@@ -6,14 +8,25 @@ import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
 const db = knex(knexConfig[process.env.NODE_ENV]);
 
+const imagePathPrefix = knexConfig[process.env.NODE_ENV].imagePathPrefix;
+
 const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
 const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
 const BASE_URL = process.env.URL_IMAGE_PUBLIC;
+const BUCKET_NAME = process.env.S3_BUCKET_NAME;
+const EXPIRATION_TIME = 20 * 60;
+
+const s3Client = new S3Client({
+    region: 'ap-southeast-3',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    }
+});
 
 export class RecommendationController {
     static async getDataListRecommendedLocation(req, res, next) {
-
         try {
             const rawLocations = await db('recommended_locations')
                 .select(
@@ -46,12 +59,29 @@ export class RecommendationController {
                 .whereIn('recommend_id', recommendedLocationIds)
                 .whereNotNull('recommend_id');
 
-            const combinedData = rawLocations.map(location => {
-                const locationImages = rawImages
+            const combinedData = await Promise.all(rawLocations.map(async(location) => {
+                const locationImages = await Promise.all(rawImages
                     .filter(image => image.recommend_id === location.id)
-                    .map(image => ({
-                        ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
-                        photo_url: `${BASE_URL}images/recommended_location/${image.photo_url}`,
+                    .map(async(image) => {
+
+                        const objectKey = `${imagePathPrefix}recommended_location/${image.photo_url}`;
+                        const command = new GetObjectCommand({
+                            Bucket: BUCKET_NAME,
+                            Key: objectKey,
+                        });
+
+                        let photoUrl = '';
+                        try {
+                            photoUrl = await getSignedUrl(s3Client, command, { expiresIn: EXPIRATION_TIME });
+                        } catch (err) {
+                            console.error("Error generating pre-signed URL:", err);
+                            photoUrl = 'URL_unavailable';
+                        }
+
+                        return {
+                            ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
+                            photo_url: photoUrl,
+                        };
                     }));
 
                 const {
@@ -66,8 +96,7 @@ export class RecommendationController {
                     ...rest,
                     images: locationImages,
                 };
-            });
-
+            }));
             res.status(200).json({
                 status: 'Success',
                 status_code: '200',

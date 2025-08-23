@@ -12,6 +12,10 @@
   "author": "TImothy Wijaya",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.873.0",
+    "@aws-sdk/lib-storage": "^3.864.0",
+    "@aws-sdk/s3-request-presigner": "^3.873.0",
+    "aws-sdk": "^2.1692.0",
     "axios": "^1.10.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
@@ -36,6 +40,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@aws-sdk/types": "^3.862.0",
     "@babel/node": "^7.25.7",
     "@babel/preset-env": "^7.25.8",
     "@types/express": "^5.0.0",

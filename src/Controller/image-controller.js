@@ -1,14 +1,16 @@
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
-import fs from 'fs';
 import knex from 'knex';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
 import NodeHashIds from '../Utils/Hashids.js';
+
 dotenv.config();
 
 const db = knex(knexConfig[process.env.NODE_ENV]);
+const imagePathPrefix = knexConfig[process.env.NODE_ENV].imagePathPrefix;
 
 const __filename = fileURLToPath(
     import.meta.url);
@@ -19,11 +21,20 @@ const SURVEY_LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 const RECOMMENDED_LOCATION_SECRET_KEY = process.env.RECOMMENDATION_LOCATION_SECRET_KEY;
 const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
 
+const s3Client = new S3Client({
+    region: 'ap-southeast-3',
+    endpoint: process.env.S3_ENDPOINT_URL,
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    }
+});
+
 export class ImageController {
     static async uploadImages(req, res, next) {
         let parentId;
         let parentTable;
-        let uploadDir;
+        let s3UploadFolder;
 
         const userId = req.user.userIds;
         const decodedUserIdArray = NodeHashIds.decode(userId, USER_SECRET_KEY);
@@ -43,14 +54,25 @@ export class ImageController {
             ));
         }
 
+        if ((survey_header_ids && recommended_location_ids) || (!survey_header_ids && !recommended_location_ids)) {
+            return next(new CustomError(
+                req.originalUrl,
+                JSON.stringify(req.headers || {}),
+                'Validation Error',
+                400,
+                'Bad Request',
+                'Either "survey_header_ids" or "recommended_location_ids" must be provided.'
+            ));
+        }
+
         if (survey_header_ids) {
             parentTable = 'survey_id';
-            uploadDir = path.join(__dirname, '..', '..', 'images', 'survey');
+            s3UploadFolder = `${imagePathPrefix}survey/`;
             const decodedId = NodeHashIds.decode(survey_header_ids, SURVEY_LOCATION_SECRET_KEY);
             parentId = parseInt(decodedId);
         } else if (recommended_location_ids) {
             parentTable = 'recommend_id';
-            uploadDir = path.join(__dirname, '..', '..', 'images', 'recommended_location');
+            s3UploadFolder = `${imagePathPrefix}recommended_location/`;
             const decodedId = NodeHashIds.decode(recommended_location_ids, RECOMMENDED_LOCATION_SECRET_KEY);
             parentId = parseInt(decodedId);
         } else {
@@ -62,10 +84,6 @@ export class ImageController {
                 'Bad Request',
                 'Either "survey_header_ids" or "recommended_location_ids" must be provided.'
             ));
-        }
-
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
         }
 
         const uploadedPhotos = [];
@@ -84,10 +102,24 @@ export class ImageController {
                     }
 
                     const timestamp = Date.now();
-                    const uniqueFilename = `${NodeHashIds.encode(timestamp)}${path.extname(photo.name)}`;
-                    const filePath = path.join(uploadDir, uniqueFilename);
+                    const uniqueFilename = `${NodeHashIds.encode(timestamp)}${fileExtension}`;
+                    const s3Key = `${s3UploadFolder}/${uniqueFilename}`;
 
-                    await photo.mv(filePath);
+                    const uploadParams = {
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: s3Key,
+                        Body: photo.data,
+                        ContentType: photo.mimetype,
+                    };
+
+                    try {
+                        const command = new PutObjectCommand(uploadParams);
+                        await s3Client.send(command);
+                        console.log(`Successfully uploaded ${uniqueFilename} to S3 bucket.`);
+                    } catch (s3Error) {
+                        console.error('S3 Upload Error:', s3Error);
+                        throw new Error(`Failed to upload file to S3: ${s3Error.message}`);
+                    }
 
                     const insertData = {
                         [parentTable]: parentId,
@@ -100,7 +132,7 @@ export class ImageController {
 
                     uploadedPhotos.push({
                         id: insertId,
-                        filename: uniqueFilename
+                        s3Key: s3Key
                     });
                 }
 
@@ -130,11 +162,25 @@ export class ImageController {
 
 export class PublicImageController {
     static async getPublicDataImages(req, res, next) {
-        const BASE_URL = process.env.URL_IMAGE_PUBLIC;
-        try {
+        const S3_BASE_URL = process.env.URL_IMAGE_PUBLIC;
 
+        try {
             const survey_ids = req.query.survey_ids;
             const recommended_ids = req.query.recommended_ids;
+
+            const authorizationHeader = req.headers['authorization'];
+            if (authorizationHeader !== IMAGE_SECRET_KEY) {
+                return next(
+                    new CustomError(
+                        req.originalUrl,
+                        JSON.stringify(req.headers || {}),
+                        'Authorization Error',
+                        401,
+                        'Unauthorized',
+                        'Authentication failed. Invalid API key.'
+                    )
+                );
+            }
 
             if (!survey_ids && !recommended_ids) {
                 return next(new CustomError(
@@ -159,12 +205,40 @@ export class PublicImageController {
             }
 
             let query = db('images').select('*');
+            let parentType = null;
 
             if (recommended_ids) {
-                const decodedId = NodeHashIds.decode(recommended_ids, process.env.RECOMMENDED_LOCATION_SECRET_KEY);
+                parentType = 'recommended_location';
+                const decodedId = NodeHashIds.decode(recommended_ids, RECOMMENDED_LOCATION_SECRET_KEY);
+
+                if (!Number.isFinite(decodedId)) {
+                    return next(new CustomError(
+                        req.originalUrl,
+                        JSON.stringify(req.headers || {}),
+                        'Validation Error',
+                        400,
+                        'Bad Request',
+                        'Invalid recommended ID. Could not be decoded.'
+                    ));
+                }
+
                 query = query.where('recommend_id', decodedId);
+
             } else if (survey_ids) {
-                const decodedId = NodeHashIds.decode(survey_ids, process.env.SURVEY_LOCATION_SECRET_KEY);
+                parentType = 'survey';
+                const decodedId = NodeHashIds.decode(survey_ids, SURVEY_LOCATION_SECRET_KEY);
+
+                if (!Number.isFinite(decodedId)) {
+                    return next(new CustomError(
+                        req.originalUrl,
+                        JSON.stringify(req.headers || {}),
+                        'Validation Error',
+                        400,
+                        'Bad Request',
+                        'Invalid survey ID. Could not be decoded.'
+                    ));
+                }
+
                 query = query.where('survey_id', decodedId);
             }
 
@@ -172,17 +246,11 @@ export class PublicImageController {
 
             const encodedImagesWithUrl = allImages.map(image => {
                 const encodedId = NodeHashIds.encode(image.id, IMAGE_SECRET_KEY);
-                let photoUrl;
-
-                if (image.recommended_id) {
-                    photoUrl = `${BASE_URL}recommended_location/${image.photo}`;
-                } else {
-                    photoUrl = `${BASE_URL}survey/${image.photo}`;
-                }
+                const photoUrl = `${imagePathPrefix}${parentType}/${image.photo}`;
 
                 return {
                     image_ids: encodedId,
-                    url: photoUrl
+                    path: photoUrl
                 };
             });
 

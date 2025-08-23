@@ -22,8 +22,8 @@ export default {
             min: 2,
             max: 10,
             acquireTimeoutMillis: 30000,
-        }
-
+        },
+        imagePathPrefix: process.env.PATH_AWS_S3_DEV,
     },
 
     staging: {
@@ -46,7 +46,8 @@ export default {
             min: 2,
             max: 10,
             acquireTimeoutMillis: 30000,
-        }
+        },
+        imagePathPrefix: process.env.PATH_AWS_S3_STAGING,
     },
 
     production: {
@@ -69,6 +70,7 @@ export default {
             min: 2,
             max: 10,
             acquireTimeoutMillis: 30000,
-        }
+        },
+        imagePathPrefix: process.env.PATH_AWS_S3_PROD,
     }
 };

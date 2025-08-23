@@ -7,6 +7,9 @@ import NodeHashIds from '../Utils/Hashids.js';
 dotenv.config();
 
 const db = knex(knexConfig[process.env.NODE_ENV]);
+
+const imagePathPrefix = knexConfig[process.env.NODE_ENV].imagePathPrefix;
+
 const LOCATION_SECRET_KEY = process.env.SURVEY_LOCATION_SECRET_KEY;
 const USER_SECRET_KEY = process.env.USER_SECRET_KEY;
 const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
@@ -59,21 +62,21 @@ export class SurveyController {
                 .join('master_identities', 'store_locations.identity_id', '=', 'master_identities.id')
                 .where('survey_headers.implemented_by', implementedById)
                 .andWhere('survey_headers.branch_code', branchCode)
-                .andWhereRaw('survey_headers.implementation_date = NOW()')
+                .andWhereRaw('DATE(survey_headers.implementation_date) = CURRENT_DATE()')
                 .whereNull('survey_headers.check_in')
                 .whereNull('survey_headers.check_out')
                 .andWhere('survey_headers.is_visited', 0)
                 .whereNull('survey_headers.deleted_at')
                 .whereNull('survey_headers.deleted_by');
 
-            if (req.user.role_ids === ROLE_ID_MAP['Sr. Clerk']) {
+            if (req.user.role_ids === ROLE_ID_MAP['SR.CLERK']) {
                 rawData = rawData.andWhere('survey_headers.survey_type', 1);
-            } else if (req.user.role_ids === ROLE_ID_MAP['Supervisor']) {
+            } else if (req.user.role_ids === ROLE_ID_MAP['SUPERVISOR']) {
                 rawData = rawData.andWhere('survey_headers.survey_type', 2);
             } else {
                 return next(new CustomError(
                     req.originalUrl,
-                    JSON.stringify({ role_id: userInfo.role_id }),
+                    JSON.stringify({ role_id: req.user.role_id }),
                     'Forbidden',
                     403,
                     'Access Denied',
@@ -292,7 +295,9 @@ export class SurveyController {
 
             const groupedImages = allImages.reduce((acc, image) => {
                 if (!acc[image.survey_id]) acc[image.survey_id] = [];
-                const imageUrl = `${BASE_URL}images/survey/${image.photo}`;
+
+                // PAKE S3 AWS
+                const imageUrl = `${BASE_URL}${imagePathPrefix}${image.photo}`;
 
                 acc[image.survey_id].push({
                     image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
