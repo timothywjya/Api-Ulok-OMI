@@ -10,7 +10,7 @@ import { recommendedLocationValidation } from '../Validation/insert-validation.j
 
 const router = Router();
 
-router.post('/omiho-user-data', UserController.getLoggedInUser);
+router.post('/login', UserController.login);
 
 router.use(authenticateToken);
 

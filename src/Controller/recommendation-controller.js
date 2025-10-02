@@ -59,10 +59,10 @@ export class RecommendationController {
                 .whereIn('recommend_id', recommendedLocationIds)
                 .whereNotNull('recommend_id');
 
-            const combinedData = await Promise.all(rawLocations.map(async(location) => {
+            const combinedData = await Promise.all(rawLocations.map(async (location) => {
                 const locationImages = await Promise.all(rawImages
                     .filter(image => image.recommend_id === location.id)
-                    .map(async(image) => {
+                    .map(async (image) => {
 
                         const objectKey = `${imagePathPrefix}recommended_location/${image.photo_url}`;
                         const command = new GetObjectCommand({

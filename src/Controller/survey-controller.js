@@ -1,3 +1,5 @@
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import dotenv from 'dotenv';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
@@ -16,6 +18,16 @@ const QUESTION_SECRET_KEY = process.env.QUESTION_SECRET_KEY;
 const OPTION_SECRET_KEY = process.env.OPTION_SECRET_KEY;
 const BASE_URL = process.env.URL_IMAGE_PUBLIC;
 const IMAGE_SECRET_KEY = process.env.IMAGE_SECRET_KEY;
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME;
+const EXPIRATION_TIME = 20 * 60;
+
+const s3Client = new S3Client({
+    region: 'ap-southeast-3',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    }
+});
 
 export class SurveyController {
     static async getDataSurvey(req, res, next) {
@@ -71,7 +83,7 @@ export class SurveyController {
 
             if (req.user.role_ids === ROLE_ID_MAP['SR.CLERK']) {
                 rawData = rawData.andWhere('survey_headers.survey_type', 1);
-            } else if (req.user.role_ids === ROLE_ID_MAP['SUPERVISOR']) {
+            } else if (ROLE_ID_MAP['SUPERVISOR'].includes(req.user.role_ids)) {
                 rawData = rawData.andWhere('survey_headers.survey_type', 2);
             } else {
                 return next(new CustomError(
@@ -115,7 +127,9 @@ export class SurveyController {
                     'option_code',
                     'option_label'
                 )
-                .whereIn("question_id", questionIds);
+                .whereIn("question_id", questionIds)
+                .whereNull("deleted_at")
+                .whereNull("deleted_by");
 
             const data = finalData.map(item => {
                 const {
@@ -293,18 +307,31 @@ export class SurveyController {
 
             const headerIds = [...new Set(allImages.map(item => item.survey_id))];
 
-            const groupedImages = allImages.reduce((acc, image) => {
-                if (!acc[image.survey_id]) acc[image.survey_id] = [];
+            const groupedImages = {};
+            await Promise.all(allImages.map(async (image) => {
+                if (!groupedImages[image.survey_id]) {
+                    groupedImages[image.survey_id] = [];
+                }
 
-                // PAKE S3 AWS
-                const imageUrl = `${BASE_URL}${imagePathPrefix}${image.photo}`;
-
-                acc[image.survey_id].push({
-                    image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
-                    url: imageUrl
+                const objectKey = `${imagePathPrefix}survey/${image.photo}`;
+                const command = new GetObjectCommand({
+                    Bucket: S3_BUCKET_NAME,
+                    Key: objectKey,
                 });
-                return acc;
-            }, {});
+
+                let signedUrl = '';
+                try {
+                    signedUrl = await getSignedUrl(s3Client, command, { expiresIn: EXPIRATION_TIME });
+                } catch (err) {
+                    console.error("Error generating pre-signed URL:", err);
+                    signedUrl = 'URL_unavailable';
+                }
+
+                groupedImages[image.survey_id].push({
+                    image_ids: NodeHashIds.encode(image.id, IMAGE_SECRET_KEY),
+                    url: signedUrl
+                });
+            }));
 
             const [rawData, rawAnswers] = await Promise.all([
                 db('survey_headers')

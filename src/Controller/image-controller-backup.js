@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 import knex from 'knex';
 import path from 'path';
@@ -36,7 +36,6 @@ export class ImageController {
         let parentId;
         let parentTable;
         let s3UploadFolder;
-        let idempotent_ids;
 
         const userId = req.user.userIds;
         const decodedUserIdArray = NodeHashIds.decode(userId, USER_SECRET_KEY);
@@ -68,13 +67,11 @@ export class ImageController {
         }
 
         if (survey_header_ids) {
-            idempotent_ids = survey_header_ids;
             parentTable = 'survey_id';
             s3UploadFolder = `${imagePathPrefix}survey/`;
             const decodedId = NodeHashIds.decode(survey_header_ids, SURVEY_LOCATION_SECRET_KEY);
             parentId = parseInt(decodedId);
         } else if (recommended_location_ids) {
-            idempotent_ids = recommended_location_ids;
             parentTable = 'recommend_id';
             s3UploadFolder = `${imagePathPrefix}recommended_location/`;
             const decodedId = NodeHashIds.decode(recommended_location_ids, RECOMMENDED_LOCATION_SECRET_KEY);
@@ -92,29 +89,24 @@ export class ImageController {
 
         await db.transaction(async trx => {
             try {
-                const existingKey = await trx('idempotent_keys')
-                    .where('uuid', idempotent_ids)
-                    .first();
+                const existingImages = await trx('images')
+                    .select('photo')
+                    .where(parentTable, parentId);
 
-                if (existingKey) {
-                    return res.status(200).json({
-                        status: 'success',
-                        status_code: 200,
-                        message: 'This request has already been processed successfully.',
+                if (existingImages.length > 0) {
+                    const s3DeletePromises = existingImages.map(image => {
+                        const s3Key = `${s3UploadFolder}${image.photo}`;
+                        const deleteParams = {
+                            Bucket: process.env.S3_BUCKET_NAME,
+                            Key: s3Key,
+                        };
+
+                        return s3Client.send(new DeleteObjectCommand(deleteParams));
                     });
+                    await Promise.all(s3DeletePromises);
+
+                    await trx('images').where(parentTable, parentId).del();
                 }
-
-                const requestData = JSON.stringify(req.body);
-                const fileNames = photos.map(photo => photo.name);
-                const fileData = JSON.stringify(fileNames);
-
-                await trx('idempotent_keys').insert({
-                    uuid: idempotent_ids,
-                    request_json: requestData,
-                    file_name_json: fileData,
-                    created_at: db.fn.now(),
-                    created_by: decodedUserId
-                });
 
                 const dataToInsert = [];
 
@@ -166,7 +158,7 @@ export class ImageController {
                 res.status(200).json({
                     status: 'success',
                     status_code: 200,
-                    message: 'Images have been inserted.',
+                    message: 'Images have been successfully replaced.',
                 });
 
             } catch (error) {
