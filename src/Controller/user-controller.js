@@ -60,6 +60,7 @@ export class UserController {
             }
 
             let omihoUserResponse;
+
             try {
                 omihoUserResponse = await axios.post(
                     OMIHO_API_ENDPOINT_USER, {

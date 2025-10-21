@@ -22,10 +22,10 @@ export class CustomError extends Error {
 const errorHandler = async(err, req, res, next) => {
     const isCustomError = err instanceof CustomError;
 
-    const statusCode = isCustomError && typeof err.code === 'number' ? err.code : 500;
-    const statusMessage = isCustomError && typeof err.status === 'string' ? err.status : 'Error';
-    const clientMessage = isCustomError && typeof err.message === 'string' ? err.message : 'Terjadi kesalahan pada server.';
-    const errorMessage = isCustomError && typeof err.error === 'string' ? err.error : (err.message || 'Unknown server error.');
+    let statusCode = isCustomError && typeof err.code === 'number' ? err.code : 500;
+    let statusMessage = isCustomError && typeof err.status === 'string' ? err.status : 'Error';
+    let clientMessage = isCustomError && typeof err.message === 'string' ? err.message : 'Terjadi kesalahan pada server.';
+    let errorMessage = isCustomError && typeof err.error === 'string' ? err.error : (err.message || 'Unknown server error.');
 
     let logCreatedBy = '0';
     if (req.user && req.user.userIds) {

@@ -20,7 +20,7 @@ export default {
         },
         pool: {
             min: 2,
-            max: 10,
+            max: 100,
             acquireTimeoutMillis: 30000,
         },
         imagePathPrefix: process.env.PATH_AWS_S3_DEV,
@@ -44,7 +44,7 @@ export default {
         },
         pool: {
             min: 2,
-            max: 10,
+            max: 100,
             acquireTimeoutMillis: 30000,
         },
         imagePathPrefix: process.env.PATH_AWS_S3_STAGING,
@@ -68,7 +68,7 @@ export default {
         },
         pool: {
             min: 2,
-            max: 10,
+            max: 100,
             acquireTimeoutMillis: 30000,
         },
         imagePathPrefix: process.env.PATH_AWS_S3_PROD,

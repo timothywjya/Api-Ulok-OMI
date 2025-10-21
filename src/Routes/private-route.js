@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import rateLimit from 'express-rate-limit';
 import { authenticateToken } from '../Application/Middleware/ApiMiddleware.js';
 import { recommendedLocationMiddleware } from '../Application/Middleware/InsertDataMiddleware.js';
 import { ImageController } from '../Controller/image-controller.js';
@@ -10,7 +11,18 @@ import { recommendedLocationValidation } from '../Validation/insert-validation.j
 
 const router = Router();
 
-router.post('/login', UserController.login);
+const loginLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 429,
+        message: "Too much Login Attempt, Please Try Again in 5 Minutes",
+    },
+});
+
+router.post('/login', loginLimiter, UserController.login);
 
 router.use(authenticateToken);
 
