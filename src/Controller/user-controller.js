@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 import { CustomError } from '../Error/error-handling.js';
-import { ROLE_ID_MAP } from '../Helper/constanta.js';
 import NodeHashIds from '../Utils/Hashids.js';
 
 const db = knex(knexConfig[process.env.NODE_ENV || 'development']);
@@ -48,6 +47,7 @@ export class UserController {
             }
 
             const bearerToken = oAuthResponse.data.access_token;
+
             if (!bearerToken) {
                 return next(new CustomError(
                     req.originalUrl,
@@ -98,21 +98,11 @@ export class UserController {
             }
 
             const getRole = await db('roles')
+                .where('cient_id', OAUTH_CLIENT_ID)
                 .where('oauth_role_id', userInfo.role_id)
                 .first();
 
             if (!getRole) {
-                return next(new CustomError(
-                    req.originalUrl,
-                    JSON.stringify({ role_id: userInfo.role_id }),
-                    'Role Not Found',
-                    404,
-                    'Role not found in the local database',
-                    'The OAuth role ID from OMIHO is not mapped to a local role.'
-                ));
-            }
-
-            if (!ROLE_ID_MAP['SUPERVISOR'].includes(getRole.oauth_role_id) && getRole.oauth_role_id !== ROLE_ID_MAP['SR.CLERK']) {
                 return next(new CustomError(
                     req.originalUrl,
                     JSON.stringify({ role_id: userInfo.role_id }),
